@@ -14,6 +14,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private int maxCoins = 120;
     [SerializeField] private int maxMaterials = 200;
     [SerializeField] private int minIndex = 0;
+    [HideInInspector] public bool speedUpgrade;
     public MaterialsData currentMaterialData;
 
     void Start()
@@ -27,8 +28,15 @@ public class PlayerController : MonoBehaviour
         verticalMove = GameManager.Instance.inputManager.InputVertical();
     }
 
+    
+
     void FixedUpdate()
     {
+        if (speedUpgrade)
+        {
+            playerSpeed = 9;
+        }
+
         player.Move(new Vector3(-horizontalMove, 0, -verticalMove) * playerSpeed * Time.deltaTime);
     }
 
@@ -40,6 +48,11 @@ public class PlayerController : MonoBehaviour
     void OnTriggerExit(Collider other)
     {
         currentMaterialData = null;
+
+        if (other.gameObject.CompareTag("UpgradeShop"))
+        {
+            GameManager.Instance.uiManager.ShowUpgradePanel(true);
+        }
     }
 
     void OnTriggerStay(Collider other)
@@ -92,11 +105,22 @@ public class PlayerController : MonoBehaviour
 
             currentMaterialData.maxMaterialsBuild = maxMaterials;
         }
+
+        if (other.gameObject.CompareTag("UpgradeShop"))
+        {
+            // if (currentMaterials == minIndex)
+            // {
+            //     return;
+            // }
+
+            // currentMaterials--;
+            // currentMaterialData.currentMaterialBuild++;
+
+            // currentMaterialData.maxMaterialsBuild = maxMaterials;
+
+            GameManager.Instance.uiManager.ShowUpgradePanel(false);
+        }
         
     }
 
-    // void OnTriggerExit(Collider other)
-    // {
-        
-    // }
 }
