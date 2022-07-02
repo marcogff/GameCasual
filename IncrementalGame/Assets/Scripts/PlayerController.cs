@@ -17,32 +17,52 @@ public class PlayerController : MonoBehaviour
     [HideInInspector] public bool speedUpgrade;
     public MaterialsData currentMaterialData;
     private bool showed;
+    private ParticleSystem particles;
+    private ParticleSystem particlesStay;
+    private float angle;
 
     void Start()
     {
         player = this.GetComponent<CharacterController>();
+        particles = this.transform.GetChild(1).GetComponent<ParticleSystem>();
+        particlesStay = this.transform.GetChild(2).GetComponent<ParticleSystem>();
     }
 
     void Update()
     {
+        if(player.velocity.magnitude <= 0)
+        {
+            particles.gameObject.SetActive(false);
+            particlesStay.gameObject.SetActive(true);
+        }
+
+        else
+        {
+            particles.gameObject.SetActive(true);
+            particlesStay.Clear();
+        }
+
         horizontalMove = GameManager.Instance.inputManager.InputHorizontal();
         verticalMove = GameManager.Instance.inputManager.InputVertical();
 
-        // if(player.velocity.magnitude <= 0)
-        // {
-        //     Debug.Log("STOP");
-        // }
+        if (GameManager.Instance.currentRotation)
+        {
+            return;
+        }
+
+        angle = Mathf.Atan2(horizontalMove, verticalMove) * Mathf.Rad2Deg;
+
     }
 
     void FixedUpdate()
     {
+
+        this.transform.rotation = Quaternion.Euler(new Vector3(0, angle, 0));
+
         if (speedUpgrade)
         {
             playerSpeed = 9;
         }
-        // Vector3 currentPos = new Vector3(-horizontalMove, 0, -verticalMove);
-
-        // LeanTween.move(player.gameObject, new Vector3(-horizontalMove, 0, -verticalMove), .1f);
 
         player.Move(new Vector3(-horizontalMove, 0, -verticalMove) * playerSpeed * Time.deltaTime);
     }

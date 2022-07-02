@@ -21,5 +21,6 @@ public class GameManager : MonoBehaviour
     public PlayerController playerController;
     public InputManager inputManager;
     public UIManager uiManager;
+    public bool currentRotation = false;
 
 }

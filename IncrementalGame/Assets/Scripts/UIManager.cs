@@ -31,13 +31,11 @@ public class UIManager : MonoBehaviour
         if (GameManager.Instance.playerController.currentCoins <= 120)
         {
             upgradePanel.transform.GetChild(0).GetChild(3).GetComponent<Button>().interactable = false;
-            // upgradePanel.transform.GetChild(0).GetChild(3).GetComponent<Animator>().enabled = false;
         }
 
         else
         {
             upgradePanel.transform.GetChild(0).GetChild(3).GetComponent<Button>().interactable = true;
-            // upgradePanel.transform.GetChild(0).GetChild(3).GetComponent<Animator>().enabled = true;
         }
     }
 
@@ -48,15 +46,21 @@ public class UIManager : MonoBehaviour
         upgradePanel.transform.GetChild(0).GetComponent<Image>().enabled = true;
         upgradePanel.transform.GetChild(0).GetChild(3).GetComponent<Image>().enabled = false;
         upgradePanel.transform.GetChild(0).GetChild(3).GetChild(0).GetComponent<TextMeshProUGUI>().text = "EQUIPPED";
-        // upgradePanel.transform.GetChild(0).GetChild(3).GetComponent<Animator>().enabled = false;
     }
-    private IEnumerator FadeInElements()
+    private void FadeInElements()
     {
-        LeanTween.alphaCanvas(upgradePanel.transform.GetChild(0).GetComponent<CanvasGroup>(), 1, 1f);
+        LeanTween.alphaCanvas(upgradePanel.transform.GetChild(0).GetComponent<CanvasGroup>(), 1, 1f).setOnComplete(()=> 
+            StartCoroutine(RepeatAnim())
+            );;
+    }
+    private IEnumerator RepeatAnim()
+    {
 
-        yield return new WaitForSeconds(.15f);
+        upgradePanel.transform.GetChild(0).GetChild(3).GetComponent<Transform>().DOShakeRotation(.6f, 30, 25, 25);
 
-        upgradePanel.transform.GetChild(0).GetChild(3).GetComponent<Transform>().DOShakeRotation(.4f, 14, 10);
+        yield return new WaitForSeconds(3f);
+
+        yield return StartCoroutine(RepeatAnim());
     }
 
     private void FadeOutElements()
@@ -71,13 +75,13 @@ public class UIManager : MonoBehaviour
         if(active)
         {
             LeanTween.moveX(upgradePanel.GetComponent<RectTransform>(), 0, .35f).setEase(type).setOnComplete(()=> 
-            StartCoroutine(FadeInElements())
+            FadeInElements()
             );
         }
 
         else
         {
-            LeanTween.moveX(upgradePanel.GetComponent<RectTransform>(), 500, .35f).setEase(type).setOnComplete(()=> 
+            LeanTween.moveX(upgradePanel.GetComponent<RectTransform>(), 1200, .35f).setEase(type).setOnComplete(()=> 
             FadeOutElements()
             );
         }
@@ -87,10 +91,5 @@ public class UIManager : MonoBehaviour
     {
         element.DOFade(endValue, time);
     }
-
-    // private void FadeText(TextMeshPro element, int endValue, float time)
-    // {
-    //     element.DOFade(endValue, time);
-    // }
 
 }
