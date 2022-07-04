@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using DG.Tweening;
 
 public class PlayerController : MonoBehaviour
 {
@@ -15,6 +16,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private int maxMaterials = 200;
     [SerializeField] private int minIndex = 0;
     [HideInInspector] public bool speedUpgrade;
+    private bool _isStopped;
     public MaterialsData currentMaterialData;
     private bool showed;
     private ParticleSystem particles;
@@ -30,7 +32,8 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
-        if(player.velocity.magnitude <= 0)
+
+        if (player.velocity.magnitude <= 0)
         {
             particles.gameObject.SetActive(false);
             particlesStay.gameObject.SetActive(true);
@@ -64,7 +67,37 @@ public class PlayerController : MonoBehaviour
             playerSpeed = 9;
         }
 
-        player.Move(new Vector3(-horizontalMove, 0, -verticalMove) * playerSpeed * Time.deltaTime);
+        if (player.velocity == Vector3.zero)
+        {
+            if (!_isStopped)
+            {
+                LeanTween.easeInOutBack(10, 25, 22);
+                Debug.Log("STOP");
+                _isStopped = true;
+            }
+        }
+
+        else
+        {
+            _isStopped = false;
+        }
+
+        // LeanTween.move
+
+        // LeanTween.move(player.gameObject, new Vector3(-horizontalMove, 0, -verticalMove) * playerSpeed, 0);
+        // player.transform.position = Vector3.SmoothDamp(player.transform.position, new Vector3(-horizontalMove, 0, -verticalMove), playerSpeed * Time.deltaTime, 1, 11);
+
+        // transform.position = Vector3.Lerp(transform.position, charPos, playerSpeed * Time.deltaTime);
+        // player.transform.DOMove(charPos, 0);
+
+        Run();
+
+    }
+
+    void Run()
+    {
+        Vector3 charPos = new Vector3(-horizontalMove, 0, -verticalMove) * playerSpeed * Time.deltaTime;
+        player.Move(charPos * playerSpeed * Time.deltaTime);
     }
 
     void OnTriggerEnter(Collider other)
@@ -110,7 +143,7 @@ public class PlayerController : MonoBehaviour
 
             currentCoins--;
         }
-        
+
         if (other.gameObject.CompareTag("Materials"))
         {
             if (currentMaterials == maxMaterials)
@@ -154,7 +187,7 @@ public class PlayerController : MonoBehaviour
             GameManager.Instance.uiManager.ShowUpgradePanel(false);
             showed = true;
         }
-        
+
     }
 
 }

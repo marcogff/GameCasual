@@ -23,8 +23,8 @@ public class InputManager : MonoBehaviour, IDragHandler, IPointerDownHandler, IP
 
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(imgJoystickBg.rectTransform, eventData.position, eventData.pressEventCamera, out posInput))
         {
-            posInput.x = posInput.x / (imgJoystickBg.rectTransform.sizeDelta.x) * 2;
-            posInput.y = posInput.y / (imgJoystickBg.rectTransform.sizeDelta.y) * 2;
+            posInput.x = posInput.x / (imgJoystickBg.rectTransform.sizeDelta.x) * 4;
+            posInput.y = posInput.y / (imgJoystickBg.rectTransform.sizeDelta.y) * 4;
 
             if (posInput.magnitude > 1f)
             {
