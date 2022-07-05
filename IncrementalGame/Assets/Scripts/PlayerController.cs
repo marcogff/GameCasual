@@ -22,12 +22,17 @@ public class PlayerController : MonoBehaviour
     private ParticleSystem particles;
     private ParticleSystem particlesStay;
     private float angle;
+    public bool canStop;
+    public Vector3 moveDirection;
+
+    public CharacterController targetTransform;
 
     void Start()
     {
         player = this.GetComponent<CharacterController>();
         particles = this.transform.GetChild(1).GetComponent<ParticleSystem>();
         particlesStay = this.transform.GetChild(2).GetComponent<ParticleSystem>();
+        targetTransform.transform.position = player.transform.position;
     }
 
     void Update()
@@ -67,10 +72,11 @@ public class PlayerController : MonoBehaviour
             playerSpeed = 9;
         }
 
-        if (player.velocity == Vector3.zero)
+        if (targetTransform.velocity == Vector3.zero)
         {
             if (!_isStopped)
             {
+                targetTransform.transform.position = player.transform.position;
                 LeanTween.easeInOutBack(10, 25, 22);
                 Debug.Log("STOP");
                 _isStopped = true;
@@ -89,6 +95,7 @@ public class PlayerController : MonoBehaviour
 
         // transform.position = Vector3.Lerp(transform.position, charPos, playerSpeed * Time.deltaTime);
         // player.transform.DOMove(charPos, 0);
+        targetTransform.Move(new Vector3(-horizontalMove, 0, -verticalMove));
 
         Run();
 
@@ -96,8 +103,8 @@ public class PlayerController : MonoBehaviour
 
     void Run()
     {
-        Vector3 charPos = new Vector3(-horizontalMove, 0, -verticalMove) * playerSpeed * Time.deltaTime;
-        player.Move(charPos * playerSpeed * Time.deltaTime);
+        player.transform.position = Vector3.Lerp(transform.position, targetTransform.transform.position, playerSpeed * Time.deltaTime);
+
     }
 
     void OnTriggerEnter(Collider other)

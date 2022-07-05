@@ -9,6 +9,12 @@ public class InputManager : MonoBehaviour, IDragHandler, IPointerDownHandler, IP
     private Image imgJoystick;
     private Vector2 posInput;
     private Vector3 mousePos;
+
+    Vector2 movementInput = Vector2.zero;
+    float forwardVelocity = 0;
+    float sidewaysVelocity = 0;
+
+    public float movementSmoothing = 0.15f;
     [SerializeField]
 
     void Start()
@@ -23,6 +29,7 @@ public class InputManager : MonoBehaviour, IDragHandler, IPointerDownHandler, IP
 
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(imgJoystickBg.rectTransform, eventData.position, eventData.pressEventCamera, out posInput))
         {
+
             posInput.x = posInput.x / (imgJoystickBg.rectTransform.sizeDelta.x) * 4;
             posInput.y = posInput.y / (imgJoystickBg.rectTransform.sizeDelta.y) * 4;
 
@@ -43,13 +50,15 @@ public class InputManager : MonoBehaviour, IDragHandler, IPointerDownHandler, IP
             imgJoystick.transform.position = mousePos;
         }
     }
-    
+
 
     public void OnPointerDown(PointerEventData eventData)
     {
         GameManager.Instance.currentRotation = false;
         LeanTween.alphaCanvas(imgJoystick.rectTransform.parent.GetComponent<CanvasGroup>(), 1, .1f);
         OnDrag(eventData);
+        GameManager.Instance.playerController.canStop = false;
+
     }
 
     public void OnPointerUp(PointerEventData eventData)
@@ -58,6 +67,7 @@ public class InputManager : MonoBehaviour, IDragHandler, IPointerDownHandler, IP
         posInput = Vector2.zero;
         LeanTween.alphaCanvas(imgJoystick.rectTransform.parent.GetComponent<CanvasGroup>(), .6f, .1f);
         LeanTween.move(imgJoystick.rectTransform, Vector2.zero, .5f).setEaseOutBounce();
+        GameManager.Instance.playerController.canStop = true;
     }
 
     public float InputHorizontal()
@@ -65,7 +75,7 @@ public class InputManager : MonoBehaviour, IDragHandler, IPointerDownHandler, IP
         if (posInput.x != 0)
             return posInput.x;
         else
-            return Input.GetAxis("Horizontal");
+            return Input.GetAxisRaw("Horizontal");
 
     }
 
@@ -74,7 +84,7 @@ public class InputManager : MonoBehaviour, IDragHandler, IPointerDownHandler, IP
         if (posInput.y != 0)
             return posInput.y;
         else
-            return Input.GetAxis("Vertical");
+            return Input.GetAxisRaw("Vertical");
     }
 
 }
