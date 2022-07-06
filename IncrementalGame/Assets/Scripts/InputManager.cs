@@ -3,7 +3,7 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using DG.Tweening;
 
-public class InputManager : MonoBehaviour, IDragHandler, IPointerDownHandler, IPointerUpHandler
+public class InputManager : MonoBehaviour /*, IDragHandler, IPointerDownHandler, IPointerUpHandler */
 {
     private Image imgJoystickBg;
     private Image imgJoystick;
@@ -24,22 +24,26 @@ public class InputManager : MonoBehaviour, IDragHandler, IPointerDownHandler, IP
         mousePos = Input.mousePosition;
     }
 
-    public void OnDrag(PointerEventData eventData)
+    // public void OnDrag(PointerEventData eventData)
+    // {
+
+    //     if (RectTransformUtility.ScreenPointToLocalPointInRectangle(imgJoystickBg.rectTransform, eventData.position, eventData.pressEventCamera, out posInput))
+    //     {
+
+    //         posInput.x = posInput.x / (imgJoystickBg.rectTransform.sizeDelta.x) * 4;
+    //         posInput.y = posInput.y / (imgJoystickBg.rectTransform.sizeDelta.y) * 4;
+
+    //         if (posInput.magnitude > 1f)
+    //         {
+    //             posInput = posInput.normalized;
+    //         }
+
+    //         imgJoystick.rectTransform.anchoredPosition = new Vector2(posInput.x * (imgJoystickBg.rectTransform.sizeDelta.x / 6), posInput.y * (imgJoystickBg.rectTransform.sizeDelta.y / 6));
+    //     }
+    // }
+    private void Update() 
     {
-
-        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(imgJoystickBg.rectTransform, eventData.position, eventData.pressEventCamera, out posInput))
-        {
-
-            posInput.x = posInput.x / (imgJoystickBg.rectTransform.sizeDelta.x) * 4;
-            posInput.y = posInput.y / (imgJoystickBg.rectTransform.sizeDelta.y) * 4;
-
-            if (posInput.magnitude > 1f)
-            {
-                posInput = posInput.normalized;
-            }
-
-            imgJoystick.rectTransform.anchoredPosition = new Vector2(posInput.x * (imgJoystickBg.rectTransform.sizeDelta.x / 6), posInput.y * (imgJoystickBg.rectTransform.sizeDelta.y / 6));
-        }
+        Movement();
     }
 
     private void Movement()
@@ -52,23 +56,23 @@ public class InputManager : MonoBehaviour, IDragHandler, IPointerDownHandler, IP
     }
 
 
-    public void OnPointerDown(PointerEventData eventData)
-    {
-        GameManager.Instance.currentRotation = false;
-        LeanTween.alphaCanvas(imgJoystick.rectTransform.parent.GetComponent<CanvasGroup>(), 1, .1f);
-        OnDrag(eventData);
-        GameManager.Instance.playerController.canStop = false;
+    // public void OnPointerDown(PointerEventData eventData)
+    // {
+    //     GameManager.Instance.currentRotation = false;
+    //     LeanTween.alphaCanvas(imgJoystick.rectTransform.parent.GetComponent<CanvasGroup>(), 1, .1f);
+    //     OnDrag(eventData);
+    //     GameManager.Instance.playerController.canStop = false;
 
-    }
+    // }
 
-    public void OnPointerUp(PointerEventData eventData)
-    {
-        GameManager.Instance.currentRotation = true;
-        posInput = Vector2.zero;
-        LeanTween.alphaCanvas(imgJoystick.rectTransform.parent.GetComponent<CanvasGroup>(), .6f, .1f);
-        LeanTween.move(imgJoystick.rectTransform, Vector2.zero, .5f).setEaseOutBounce();
-        GameManager.Instance.playerController.canStop = true;
-    }
+    // public void OnPointerUp(PointerEventData eventData)
+    // {
+    //     GameManager.Instance.currentRotation = true;
+    //     posInput = Vector2.zero;
+    //     LeanTween.alphaCanvas(imgJoystick.rectTransform.parent.GetComponent<CanvasGroup>(), .6f, .1f);
+    //     LeanTween.move(imgJoystick.rectTransform, Vector2.zero, .5f).setEaseOutBounce();
+    //     GameManager.Instance.playerController.canStop = true;
+    // }
 
     public float InputHorizontal()
     {

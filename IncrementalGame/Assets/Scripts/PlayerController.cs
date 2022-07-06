@@ -20,7 +20,6 @@ public class PlayerController : MonoBehaviour
     public MaterialsData currentMaterialData;
     private bool showed;
     private ParticleSystem particles;
-    private ParticleSystem particlesStay;
     private float angle;
     public bool canStop;
     public Vector3 moveDirection;
@@ -31,7 +30,6 @@ public class PlayerController : MonoBehaviour
     {
         player = this.GetComponent<CharacterController>();
         particles = this.transform.GetChild(1).GetComponent<ParticleSystem>();
-        particlesStay = this.transform.GetChild(2).GetComponent<ParticleSystem>();
         targetTransform.transform.position = player.transform.position;
     }
 
@@ -41,13 +39,11 @@ public class PlayerController : MonoBehaviour
         if (player.velocity.magnitude <= 0)
         {
             particles.gameObject.SetActive(false);
-            particlesStay.gameObject.SetActive(true);
         }
 
         else
         {
             particles.gameObject.SetActive(true);
-            particlesStay.Clear();
         }
 
         horizontalMove = GameManager.Instance.inputManager.InputHorizontal();
@@ -95,7 +91,8 @@ public class PlayerController : MonoBehaviour
 
         // transform.position = Vector3.Lerp(transform.position, charPos, playerSpeed * Time.deltaTime);
         // player.transform.DOMove(charPos, 0);
-        targetTransform.Move(new Vector3(-horizontalMove, 0, -verticalMove));
+
+        player.Move(new Vector3(-horizontalMove, 0, -verticalMove) * playerSpeed * Time.deltaTime);
 
         Run();
 
@@ -103,7 +100,7 @@ public class PlayerController : MonoBehaviour
 
     void Run()
     {
-        player.transform.position = Vector3.Lerp(transform.position, targetTransform.transform.position, playerSpeed * Time.deltaTime);
+        // player.transform.position = Vector3.Lerp(transform.position, targetTransform.transform.position, playerSpeed * Time.deltaTime);
 
     }
 
