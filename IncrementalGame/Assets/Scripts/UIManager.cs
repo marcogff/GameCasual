@@ -8,22 +8,62 @@ using DG.Tweening;
 
 public class UIManager : MonoBehaviour
 {
-    [SerializeField] private TextMeshProUGUI coinsText;
-    [SerializeField] private TextMeshProUGUI materialsText;
+    [SerializeField] private CanvasGroup panelCanvas;
+    [SerializeField] private CanvasGroup woodCanvas;
+    [SerializeField] private CanvasGroup fishCanvas;
+    private TextMeshProUGUI _woodText;
+    private TextMeshProUGUI _fishText;
     [SerializeField] public Image upgradePanel;
     public LeanTweenType type;
+    private bool _isDisplayed;
 
+    void Start()
+    {
+        _woodText = woodCanvas.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
+        _fishText = fishCanvas.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
+    }
 
     void Update()
     {
         SetUIText();
         ActivateUpgradeBtn();
+        
+        if (_isDisplayed)
+        {
+            LeanTween.alphaCanvas(woodCanvas, 1, .2f);
+            _woodText.text = GameManager.Instance.playerController.currentElements.Count.ToString();
+
+            _isDisplayed = false;
+        }
     }
 
     private void SetUIText()
     {
-        coinsText.text = GameManager.Instance.playerController.currentCoins.ToString();
-        materialsText.text = GameManager.Instance.playerController.currentMaterials.ToString();
+        if (GameManager.Instance.playerController.hasMat)
+        {
+            LeanTween.alphaCanvas(panelCanvas, 1, .2f);
+
+            for (int i = 0; i < GameManager.Instance.playerController.currentElements.Count; i++)
+            {
+                switch (GameManager.Instance.playerController.currentElements[i].name)
+                {
+                    case "log(Clone)":
+                    _isDisplayed = true;
+                    break;
+
+                    // case "":
+                    // _fishText.text = GameManager.Instance.playerController.currentElements.Count.ToString();
+                    
+                    // break;
+                }
+            }
+
+        }
+
+        else
+        {
+            LeanTween.alphaCanvas(panelCanvas, 0, .2f);
+        }
     }
 
     private void ActivateUpgradeBtn()

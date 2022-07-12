@@ -20,23 +20,53 @@ public class PlayerController : MonoBehaviour
     public MaterialsData currentMaterialData;
     private bool showed;
     private ParticleSystem particles;
-    private float angle;
+    public float angle;
     public bool canStop;
     public Vector3 moveDirection;
+    public float smooth;
+    public int playerCapacity = 20;
+    bool instantiated = false;
+    [HideInInspector]
+    public Animator animator;
 
     public CharacterController targetTransform;
+
+    public float playerAcceleration;
+    [Range(0, 1)]
+    public float dragFactor;
+    public float gravity;
+    private Transform bagPos;
+    public List<GameObject> currentElements = new List<GameObject>();
+    int index = 0;
+
+    public bool hasMat;
+    public GameObject temporalPrefab;
+    bool _isEliminated;
+
 
     void Start()
     {
         player = this.GetComponent<CharacterController>();
         particles = this.transform.GetChild(1).GetComponent<ParticleSystem>();
         targetTransform.transform.position = player.transform.position;
+        bagPos = this.transform.GetChild(3);
+        animator = transform.GetChild(0).GetChild(0).GetChild(1).GetComponent<Animator>();
+
     }
 
     void Update()
     {
+        if (currentElements.Count >= 1)
+        {
+            hasMat = true;
+        }
 
-        if (player.velocity.magnitude <= 0)
+        else
+        {
+            hasMat = false;
+        }
+
+        if (targetTransform.velocity.magnitude <= 0)
         {
             particles.gameObject.SetActive(false);
         }
@@ -61,7 +91,20 @@ public class PlayerController : MonoBehaviour
     void FixedUpdate()
     {
 
-        this.transform.rotation = Quaternion.Euler(new Vector3(0, angle, 0));
+        player.transform.rotation = Quaternion.Euler(new Vector3(0, angle, 0));
+
+        Vector3 velocity = targetTransform.velocity;
+
+        Vector3 input = new Vector3(
+            -horizontalMove,
+            0f,
+            -verticalMove
+        );
+
+        velocity += input * playerAcceleration * Time.deltaTime;
+        velocity *= dragFactor;
+        targetTransform.Move(velocity * Time.deltaTime);
+
 
         if (speedUpgrade)
         {
@@ -72,7 +115,7 @@ public class PlayerController : MonoBehaviour
         {
             if (!_isStopped)
             {
-                targetTransform.transform.position = player.transform.position;
+                // animator.SetBool("isRun", false);
                 LeanTween.easeInOutBack(10, 25, 22);
                 Debug.Log("STOP");
                 _isStopped = true;
@@ -82,26 +125,15 @@ public class PlayerController : MonoBehaviour
         else
         {
             _isStopped = false;
+            // animator.SetBool("isRun", true);
         }
 
-        // LeanTween.move
-
-        // LeanTween.move(player.gameObject, new Vector3(-horizontalMove, 0, -verticalMove) * playerSpeed, 0);
-        // player.transform.position = Vector3.SmoothDamp(player.transform.position, new Vector3(-horizontalMove, 0, -verticalMove), playerSpeed * Time.deltaTime, 1, 11);
-
-        // transform.position = Vector3.Lerp(transform.position, charPos, playerSpeed * Time.deltaTime);
-        // player.transform.DOMove(charPos, 0);
-
-        player.Move(new Vector3(-horizontalMove, 0, -verticalMove) * playerSpeed * Time.deltaTime);
-
         Run();
-
     }
 
     void Run()
     {
-        // player.transform.position = Vector3.Lerp(transform.position, targetTransform.transform.position, playerSpeed * Time.deltaTime);
-
+        player.transform.position = Vector3.Lerp(player.transform.position, targetTransform.transform.position, .15f);
     }
 
     void OnTriggerEnter(Collider other)
@@ -150,38 +182,67 @@ public class PlayerController : MonoBehaviour
 
         if (other.gameObject.CompareTag("Materials"))
         {
-            if (currentMaterials == maxMaterials)
+
+            if (currentMaterials == maxMaterials || currentElements.Count >= 15)
             {
                 return;
             }
 
-            currentMaterials++;
+            if (instantiated)
+            {
+
+                return;
+            }
+
+            if (_isStopped)
+            {
+                GameObject log = Instantiate(currentMaterialData.materialData.prefab, currentMaterialData.spawnPoint.position, Quaternion.Euler(0, 90, 0), bagPos);
+
+                temporalPrefab = log;
+
+                DeployElement(log);
+                
+            }
+
+
         }
 
         if (other.gameObject.CompareTag("UseMaterials"))
         {
-            if (currentMaterials == minIndex)
+            if (currentElements.Count == minIndex)
+            {
+                currentElements.Clear();
+
+                for (int i = 0; i < currentElements.Count; i++)
+                {
+                    Destroy(currentElements[i]);
+                }
+
+                return;
+            }
+
+            if (instantiated)
             {
                 return;
             }
 
-            currentMaterials--;
-            currentMaterialData.currentMaterialBuild++;
+            if (_isStopped)
+            {
+            currentMaterialData.spawnPoint = transform;
 
-            currentMaterialData.maxMaterialsBuild = maxMaterials;
+            GameObject log = Instantiate(currentMaterialData.materialData.prefab, currentMaterialData.spawnPoint.position, Quaternion.Euler(0, 90, 0), currentMaterialData.transform);
+
+            RemoveFunc(log);
+            }
+
         }
 
         if (other.gameObject.CompareTag("UpgradeShop"))
         {
-            // if (currentMaterials == minIndex)
-            // {
-            //     return;
-            // }
-
-            // currentMaterials--;
-            // currentMaterialData.currentMaterialBuild++;
-
-            // currentMaterialData.maxMaterialsBuild = maxMaterials;
+            if (currentElements.Count == minIndex)
+            {
+                return;
+            }
 
             if (showed)
             {
@@ -192,6 +253,76 @@ public class PlayerController : MonoBehaviour
             showed = true;
         }
 
+
+
     }
+
+    void DeployElement(GameObject element)
+    {
+        instantiated = true;
+
+        LeanTween.scale(element, new Vector3(2.5f, 2.5f, 2.5f), .1f).setEaseInBounce().setOnComplete(() =>
+
+        LeanTween.move(element, bagPos, .15f).setEaseLinear().setOnComplete(() =>
+
+        LeanTween.move(element, transform.position + new Vector3(0, 1, 0), .2f).setEaseLinear().setOnComplete(() =>
+        CompleteFunc(element, currentMaterialData.materialData.vfx, true)
+        )
+        ));
+
+    }
+
+    void RemoveFunc(GameObject prefab)
+    {
+        if (currentElements.Count == 0)
+        {
+            return;
+        }
+
+        instantiated = true;
+
+        LeanTween.scale(prefab, new Vector3(2.5f, 2.5f, 2.5f), .1f).setEaseInBounce().setOnComplete(() =>
+
+        LeanTween.move(prefab, bagPos, .15f).setEaseLinear().setOnComplete(() =>
+
+        LeanTween.move(prefab, currentMaterialData.transform.position, .2f).setEaseLinear().setOnComplete(() =>
+        CompleteFunc(prefab, currentMaterialData.materialData.vfx, false)
+        )
+        ));
+
+    }
+
+    void CompleteFunc(GameObject prefab, GameObject vfx, bool add)
+    {
+        // _isEliminated = false;
+
+        GameObject effect = Instantiate(vfx, prefab.transform.position, Quaternion.identity);
+        Destroy(effect, .3f);
+        prefab.SetActive(false);
+
+        instantiated = false;
+
+        if (add)
+        {
+            currentElements.Add(prefab);
+        }
+
+        else
+        {
+
+            currentMaterialData.elementsInBuild.Add(prefab);
+            Destroy(currentElements[0], .2f);
+            currentElements.Remove(currentElements[0]);
+
+            // if (currentMaterialData.elementsInBuild.Count == 15)
+            // {
+            //     // for (int i = 0; i < currentElements.Count; i++)
+            //     // {
+            //     // }
+            // }
+        }
+
+    }
+
 
 }
