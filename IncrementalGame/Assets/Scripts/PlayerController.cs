@@ -49,7 +49,7 @@ public class PlayerController : MonoBehaviour
         player = this.GetComponent<CharacterController>();
         particles = this.transform.GetChild(1).GetComponent<ParticleSystem>();
         targetTransform.transform.position = player.transform.position;
-        bagPos = this.transform.GetChild(3);
+        bagPos = this.transform.GetChild(2);
         animator = transform.GetChild(0).GetChild(0).GetChild(1).GetComponent<Animator>();
 
     }
