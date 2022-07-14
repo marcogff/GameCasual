@@ -15,7 +15,8 @@ public class UIManager : MonoBehaviour
     private TextMeshProUGUI _fishText;
     [SerializeField] public Image upgradePanel;
     public LeanTweenType type;
-    private bool _isDisplayed;
+    private bool _isDisplayedWood;
+    private bool _isDisplayedFish;
 
     void Start()
     {
@@ -27,13 +28,33 @@ public class UIManager : MonoBehaviour
     {
         SetUIText();
         ActivateUpgradeBtn();
-        
-        if (_isDisplayed)
-        {
-            LeanTween.alphaCanvas(woodCanvas, 1, .2f);
-            _woodText.text = GameManager.Instance.playerController.currentElements.Count.ToString();
 
-            _isDisplayed = false;
+        if (_isDisplayedWood)
+        {
+            woodCanvas.gameObject.SetActive(true);
+            _woodText.text = GameManager.Instance.playerController.currentElementsWood.Count.ToString();
+            LeanTween.alphaCanvas(woodCanvas, 1, .2f);
+
+            _isDisplayedWood = false;
+        }
+        else
+        {
+            woodCanvas.gameObject.SetActive(false);
+        }
+
+        if (_isDisplayedFish)
+        {
+            fishCanvas.gameObject.SetActive(true);
+            LeanTween.alphaCanvas(fishCanvas, 1, .2f);
+            _fishText.text = GameManager.Instance.playerController.currentElementsFish.Count.ToString();
+
+            _isDisplayedFish = false;
+        }
+
+        else
+        {
+            fishCanvas.gameObject.SetActive(false);
+            
         }
     }
 
@@ -43,18 +64,20 @@ public class UIManager : MonoBehaviour
         {
             LeanTween.alphaCanvas(panelCanvas, 1, .2f);
 
-            for (int i = 0; i < GameManager.Instance.playerController.currentElements.Count; i++)
+            for (int i = 0; i < GameManager.Instance.playerController.currentElementsWood.Count; i++)
             {
-                switch (GameManager.Instance.playerController.currentElements[i].name)
+                if (GameManager.Instance.playerController.currentElementsWood[i].name == "log(Clone)")
                 {
-                    case "log(Clone)":
-                    _isDisplayed = true;
-                    break;
+                    _isDisplayedWood = true;
+                }
+            }
 
-                    // case "":
-                    // _fishText.text = GameManager.Instance.playerController.currentElements.Count.ToString();
-                    
-                    // break;
+            for (int i = 0; i < GameManager.Instance.playerController.currentElementsFish.Count; i++)
+            {
+                if (GameManager.Instance.playerController.currentElementsFish[i].name == "Fish(Clone)")
+                {
+                    _isDisplayedFish = true;
+                    Debug.Log("DISPLAYED");
                 }
             }
 
@@ -68,7 +91,7 @@ public class UIManager : MonoBehaviour
 
     private void ActivateUpgradeBtn()
     {
-        if (GameManager.Instance.playerController.currentCoins <= 120)
+        if (GameManager.Instance.playerController.currentElementsFish.Count <= 19)
         {
             upgradePanel.transform.GetChild(0).GetChild(3).GetComponent<Button>().interactable = false;
         }
@@ -83,24 +106,18 @@ public class UIManager : MonoBehaviour
     {
         GameManager.Instance.playerController.speedUpgrade = true;
 
+        GameManager.Instance.playerController.currentElementsFish.RemoveRange(0, 20);
+
         upgradePanel.transform.GetChild(0).GetComponent<Image>().enabled = true;
         upgradePanel.transform.GetChild(0).GetChild(3).GetComponent<Image>().enabled = false;
         upgradePanel.transform.GetChild(0).GetChild(3).GetChild(0).GetComponent<TextMeshProUGUI>().text = "EQUIPPED";
     }
+
     private void FadeInElements()
     {
-        LeanTween.alphaCanvas(upgradePanel.transform.GetChild(0).GetComponent<CanvasGroup>(), 1, 1f).setOnComplete(()=> 
-            StartCoroutine(RepeatAnim())
-            );;
-    }
-    private IEnumerator RepeatAnim()
-    {
-
-        upgradePanel.transform.GetChild(0).GetChild(3).GetComponent<Transform>().DOShakeRotation(.6f, 30, 25, 25);
-
-        yield return new WaitForSeconds(3f);
-
-        yield return StartCoroutine(RepeatAnim());
+        LeanTween.alphaCanvas(upgradePanel.transform.GetChild(0).GetComponent<CanvasGroup>(), 1, 1f).setOnComplete(() =>
+        LeanTween.scale(upgradePanel.transform.GetChild(0).GetChild(3).gameObject, new Vector3(.8f, .8f, .8f), .3f).setLoopPingPong()
+            ); ;
     }
 
     private void FadeOutElements()
@@ -112,16 +129,16 @@ public class UIManager : MonoBehaviour
     {
         active = !active;
 
-        if(active)
+        if (active)
         {
-            LeanTween.moveX(upgradePanel.GetComponent<RectTransform>(), 0, .35f).setEase(type).setOnComplete(()=> 
+            LeanTween.moveX(upgradePanel.GetComponent<RectTransform>(), 0, .35f).setEase(type).setOnComplete(() =>
             FadeInElements()
             );
         }
 
         else
         {
-            LeanTween.moveX(upgradePanel.GetComponent<RectTransform>(), 1200, .35f).setEase(type).setOnComplete(()=> 
+            LeanTween.moveX(upgradePanel.GetComponent<RectTransform>(), 1200, .35f).setEase(type).setOnComplete(() =>
             FadeOutElements()
             );
         }

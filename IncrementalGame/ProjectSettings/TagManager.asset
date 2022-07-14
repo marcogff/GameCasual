@@ -9,6 +9,7 @@ TagManager:
   - Materials
   - UseMaterials
   - UpgradeShop
+  - Fish
   layers:
   - Default
   - TransparentFX
