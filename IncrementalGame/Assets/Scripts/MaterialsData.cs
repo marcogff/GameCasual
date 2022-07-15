@@ -5,29 +5,25 @@ using TMPro;
 
 public class MaterialsData : MonoBehaviour
 {
-    public int currentMaterialBuild;
     public int maxMaterialsBuild;
     public GameObject obj;
     public MaterialsSO materialData;
     public Transform spawnPoint;
     public List<GameObject> elementsInBuild = new List<GameObject>();
     public GameObject prefabLand;
-    public GameObject prefabLandNext;
-    bool _isDeploying;
-    private bool _currentDeployed;
     public BoxCollider limit;
     public TextMeshProUGUI currentText;
     public TextMeshProUGUI needText;
     public GameObject parentText;
     public bool dropItems;
     public bool canDrop = true;
-    private bool coroutineExecuted;
     public int currentElements = 10;
-    // private bool executed = false;
+    bool _isDeploying;
+    private bool _currentDeployed;
+    private bool _coroutineExecuted;
 
     void Start()
     {
-        // LeanTween.moveLocalX(this.transform.GetChild(0).GetChild(0).GetChild(1).gameObject, 2.5f, 1f).setLoopPingPong();
 
         if (dropItems)
         {
@@ -41,14 +37,12 @@ public class MaterialsData : MonoBehaviour
         {
             if (!canDrop)
             {
-                // LeanTween.scale(obj, Vector3.zero, .3f).setEaseInCirc();
                 ExecuteEffect();
 
                 this.transform.GetChild(0).GetChild(0).GetChild(1).gameObject.SetActive(false);
             }
             else
             {
-                // LeanTween.scale(obj, Vector3.one, .3f).setEaseInCirc();
                 this.transform.GetChild(0).GetChild(0).GetChild(1).gameObject.SetActive(true);
 
             }
@@ -65,7 +59,7 @@ public class MaterialsData : MonoBehaviour
         {
             if (dropItems)
             {
-                if (coroutineExecuted)
+                if (_coroutineExecuted)
                 {
                     return;
                 }
@@ -110,7 +104,6 @@ public class MaterialsData : MonoBehaviour
     {
         if (_isDeploying)
         {
-            // prefabLandNext.SetActive(true);
             limit.enabled = false;
             LeanTween.scale(prefabLand, Vector3.one, .3f).setEaseInCirc();
             _isDeploying = false;
@@ -133,7 +126,7 @@ public class MaterialsData : MonoBehaviour
     private IEnumerator Fill(int time)
     {
 
-        coroutineExecuted = true;
+        _coroutineExecuted = true;
         LeanTween.scale(obj, Vector3.zero, .3f);
         canDrop = false;
 
@@ -144,8 +137,7 @@ public class MaterialsData : MonoBehaviour
         LeanTween.scale(obj, Vector3.one, .3f);
 
         canDrop = true;
-        coroutineExecuted = false;
-        // executed = false;
+        _coroutineExecuted = false;
         currentElements = 0;
 
     }

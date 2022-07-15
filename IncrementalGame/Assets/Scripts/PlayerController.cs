@@ -5,48 +5,44 @@ using DG.Tweening;
 
 public class PlayerController : MonoBehaviour
 {
-    private float horizontalMove;
-    private float verticalMove;
-    private CharacterController player;
-    [Space(10)]
-    [SerializeField] private int minIndex = 0;
-    [HideInInspector] public bool speedUpgrade;
-    private bool _isStopped;
     public MaterialsData currentMaterialData;
-    private bool showed;
-    private ParticleSystem particles;
+    public GameObject particleSystemBreath;
     public float angle;
     public bool canStop;
-    private int _playerCapacity = 100;
-    bool instantiated = false;
-    [HideInInspector]
-    public Animator animator;
-    [SerializeField]
-    GameObject _worldCam;
-    [SerializeField]
-    GameObject _caveCam;
-
+    public int bagPosIndex;
     public CharacterController targetTransform;
-
     public float playerAcceleration;
-    [Range(0, 1)]
-    public float dragFactor;
-    public float gravity;
-    private Transform bagPos;
+    [Range(0, 1)] public float dragFactor;
+    [Space(15)]
     public List<GameObject> currentElementsWood = new List<GameObject>();
     public List<GameObject> currentElementsFish = new List<GameObject>();
-    public bool hasMat;
-    public GameObject temporalPrefab;
-    bool _isEliminated;
-    public int bagPosIndex;
-    public GameObject particleSystemBreath;
+    [Space(15)]
+    [SerializeField] GameObject _worldCam;
+    [SerializeField] GameObject _caveCam;
+    [SerializeField] private int _minIndex = 0;
 
+
+    [HideInInspector]public bool hasMat;
+    [HideInInspector] public GameObject temporalPrefab;
+    [HideInInspector] public bool speedUpgrade;
+    [HideInInspector] public Animator animator;
+
+    // Privates
+    private Transform _bagPos;
+    private float _horizontalMove;
+    private float _verticalMove;
+    private bool _isStopped;
+    private bool _showed;
+    private ParticleSystem _particles;
+    private int _playerCapacity = 100;
+    private bool _instantiated = false;
+    private CharacterController _player;
     void Start()
     {
-        player = this.GetComponent<CharacterController>();
-        particles = this.transform.GetChild(1).GetComponent<ParticleSystem>();
-        targetTransform.transform.position = player.transform.position;
-        bagPos = this.transform.GetChild(2);
+        _player = this.GetComponent<CharacterController>();
+        _particles = this.transform.GetChild(1).GetComponent<ParticleSystem>();
+        targetTransform.transform.position = _player.transform.position;
+        _bagPos = this.transform.GetChild(2);
         animator = transform.GetChild(0).GetChild(0).GetChild(1).GetComponent<Animator>();
     }
 
@@ -57,7 +53,7 @@ public class PlayerController : MonoBehaviour
             playerAcceleration = 240;
         }
 
-        if (instantiated)
+        if (_instantiated)
         {
             GameManager.Instance.inputManager.enabled = false;
         }
@@ -80,37 +76,37 @@ public class PlayerController : MonoBehaviour
 
         if (targetTransform.velocity.magnitude <= 0)
         {
-            particles.gameObject.SetActive(false);
+            _particles.gameObject.SetActive(false);
         }
 
         else
         {
-            particles.gameObject.SetActive(true);
+            _particles.gameObject.SetActive(true);
         }
 
-        horizontalMove = GameManager.Instance.inputManager.InputHorizontal();
-        verticalMove = GameManager.Instance.inputManager.InputVertical();
+        _horizontalMove = GameManager.Instance.inputManager.InputHorizontal();
+        _verticalMove = GameManager.Instance.inputManager.InputVertical();
 
         if (GameManager.Instance.currentRotation)
         {
             return;
         }
 
-        angle = Mathf.Atan2(horizontalMove, verticalMove) * Mathf.Rad2Deg;
+        angle = Mathf.Atan2(_horizontalMove, _verticalMove) * Mathf.Rad2Deg;
 
     }
 
     void FixedUpdate()
     {
 
-        player.transform.rotation = Quaternion.Euler(new Vector3(0, angle, 0));
+        _player.transform.rotation = Quaternion.Euler(new Vector3(0, angle, 0));
 
         Vector3 velocity = targetTransform.velocity;
 
         Vector3 input = new Vector3(
-            -horizontalMove,
+            -_horizontalMove,
             0f,
-            -verticalMove
+            -_verticalMove
         );
 
         velocity += input * playerAcceleration * Time.deltaTime;
@@ -139,7 +135,7 @@ public class PlayerController : MonoBehaviour
 
     void Run()
     {
-        player.transform.position = Vector3.Lerp(player.transform.position, new Vector3(targetTransform.transform.position.x, player.transform.position.y, targetTransform.transform.position.z), .15f);
+        _player.transform.position = Vector3.Lerp(_player.transform.position, new Vector3(targetTransform.transform.position.x, _player.transform.position.y, targetTransform.transform.position.z), .15f);
     }
 
     void OnTriggerEnter(Collider other)
@@ -160,7 +156,7 @@ public class PlayerController : MonoBehaviour
         if (other.gameObject.CompareTag("UpgradeShop"))
         {
             GameManager.Instance.uiManager.ShowUpgradePanel(true);
-            showed = false;
+            _showed = false;
         }
 
         if (other.gameObject.CompareTag("Cave"))
@@ -182,7 +178,7 @@ public class PlayerController : MonoBehaviour
                     return;
                 }
 
-                if (instantiated)
+                if (_instantiated)
                 {
 
                     return;
@@ -191,7 +187,7 @@ public class PlayerController : MonoBehaviour
                 if (currentMaterialData.canDrop)
                 {
 
-                    GameObject log = Instantiate(currentMaterialData.materialData.prefab, currentMaterialData.spawnPoint.position, Quaternion.Euler(0, 90, 0), bagPos);
+                    GameObject log = Instantiate(currentMaterialData.materialData.prefab, currentMaterialData.spawnPoint.position, Quaternion.Euler(0, 90, 0), _bagPos);
 
                     temporalPrefab = log;
 
@@ -206,7 +202,7 @@ public class PlayerController : MonoBehaviour
                     return;
                 }
 
-                if (instantiated)
+                if (_instantiated)
                 {
 
                     return;
@@ -216,7 +212,7 @@ public class PlayerController : MonoBehaviour
                 {
 
 
-                    GameObject fish = Instantiate(currentMaterialData.materialData.prefab, currentMaterialData.spawnPoint.position, Quaternion.Euler(0, 90, 0), bagPos);
+                    GameObject fish = Instantiate(currentMaterialData.materialData.prefab, currentMaterialData.spawnPoint.position, Quaternion.Euler(0, 90, 0), _bagPos);
                     temporalPrefab = fish;
 
                     DeployElement(fish, "Fish");
@@ -232,7 +228,7 @@ public class PlayerController : MonoBehaviour
                     return;
                 }
 
-                if (currentElementsWood.Count == minIndex)
+                if (currentElementsWood.Count == _minIndex)
                 {
                     currentElementsWood.Clear();
 
@@ -244,7 +240,7 @@ public class PlayerController : MonoBehaviour
                     return;
                 }
 
-                if (instantiated)
+                if (_instantiated)
                 {
                     return;
                 }
@@ -260,13 +256,13 @@ public class PlayerController : MonoBehaviour
             if (other.gameObject.CompareTag("UpgradeShop"))
             {
 
-                if (showed)
+                if (_showed)
                 {
                     return;
                 }
 
                 GameManager.Instance.uiManager.ShowUpgradePanel(false);
-                showed = true;
+                _showed = true;
             }
         }
 
@@ -274,13 +270,13 @@ public class PlayerController : MonoBehaviour
 
     void DeployElement(GameObject element, string type)
     {
-        instantiated = true;
+        _instantiated = true;
         currentMaterialData.currentElements++;
         bagPosIndex++;
 
         LeanTween.scale(element, new Vector3(2.5f, 2.5f, 2.5f), .1f).setOnComplete(() =>
 
-        LeanTween.move(element, bagPos, .15f).setEaseLinear().setOnComplete(() =>
+        LeanTween.move(element, _bagPos, .15f).setEaseLinear().setOnComplete(() =>
 
         LeanTween.move(element, transform.position + new Vector3(0, 1, 0), .2f).setEaseLinear().setOnComplete(() =>
         CompleteFunc(element, currentMaterialData.materialData.vfx, true, type)
@@ -294,7 +290,7 @@ public class PlayerController : MonoBehaviour
     {
         element.transform.position.Scale(new Vector3(1.5f, 1.5f, 1.5f));
         
-        if (currentElementsWood.Count <= minIndex)
+        if (currentElementsWood.Count <= _minIndex)
         {
             return;
         }
@@ -303,7 +299,7 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-        instantiated = true;
+        _instantiated = true;
 
         LeanTween.scale(element, new Vector3(24f, 7f, 11f), .05f).setEaseInBounce().setOnComplete(() =>
 
@@ -322,7 +318,7 @@ public class PlayerController : MonoBehaviour
         Destroy(effect, .3f);
         prefab.SetActive(false);
 
-        instantiated = false;
+        _instantiated = false;
 
         if (type == "Wood")
         {
