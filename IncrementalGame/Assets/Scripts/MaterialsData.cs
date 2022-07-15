@@ -27,7 +27,7 @@ public class MaterialsData : MonoBehaviour
 
     void Start()
     {
-        LeanTween.moveLocalX(this.transform.GetChild(0).GetChild(0).GetChild(1).gameObject, 2.5f, 1f).setLoopPingPong();
+        // LeanTween.moveLocalX(this.transform.GetChild(0).GetChild(0).GetChild(1).gameObject, 2.5f, 1f).setLoopPingPong();
 
         if (dropItems)
         {

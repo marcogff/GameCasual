@@ -21,6 +21,10 @@ public class PlayerController : MonoBehaviour
     bool instantiated = false;
     [HideInInspector]
     public Animator animator;
+    [SerializeField]
+    GameObject _worldCam;
+    [SerializeField]
+    GameObject _caveCam;
 
     public CharacterController targetTransform;
 
@@ -141,6 +145,12 @@ public class PlayerController : MonoBehaviour
     void OnTriggerEnter(Collider other)
     {
         currentMaterialData = other.gameObject.transform.parent.GetComponent<MaterialsData>();
+
+        if (other.gameObject.CompareTag("Cave"))
+        {
+            _worldCam.SetActive(false);
+            _caveCam.SetActive(true);
+        }
     }
 
     void OnTriggerExit(Collider other)
@@ -151,6 +161,12 @@ public class PlayerController : MonoBehaviour
         {
             GameManager.Instance.uiManager.ShowUpgradePanel(true);
             showed = false;
+        }
+
+        if (other.gameObject.CompareTag("Cave"))
+        {
+            _worldCam.SetActive(true);
+            _caveCam.SetActive(false);
         }
 
     }
@@ -262,7 +278,7 @@ public class PlayerController : MonoBehaviour
         currentMaterialData.currentElements++;
         bagPosIndex++;
 
-        LeanTween.scale(element, new Vector3(2.5f, 2.5f, 2.5f), .1f).setEaseInBounce().setOnComplete(() =>
+        LeanTween.scale(element, new Vector3(2.5f, 2.5f, 2.5f), .1f).setOnComplete(() =>
 
         LeanTween.move(element, bagPos, .15f).setEaseLinear().setOnComplete(() =>
 
@@ -289,14 +305,14 @@ public class PlayerController : MonoBehaviour
 
         instantiated = true;
 
-        LeanTween.scale(element, new Vector3(2.5f, 2.5f, 2.5f), .05f).setEaseInBounce();
+        LeanTween.scale(element, new Vector3(24f, 7f, 11f), .05f).setEaseInBounce().setOnComplete(() =>
 
-        LeanTween.move(element, bagPos, .15f).setEaseLinear().setOnComplete(() =>
+        // LeanTween.move(element, bagPos, .15f).setEaseLinear().setOnComplete(() =>
 
         LeanTween.move(element, currentMaterialData.transform.position, .2f).setEaseLinear().setOnComplete(() =>
         CompleteFunc(element, currentMaterialData.materialData.vfx, false, type)
-        )
-        );
+        ))
+        ;
 
     }
 

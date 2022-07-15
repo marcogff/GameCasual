@@ -10,6 +10,7 @@ TagManager:
   - UseMaterials
   - UpgradeShop
   - Fish
+  - Cave
   layers:
   - Default
   - TransparentFX
