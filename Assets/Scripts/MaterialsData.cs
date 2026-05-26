@@ -1,10 +1,24 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 using TMPro;
 
-public class MaterialsData : MonoBehaviour
+/// <summary>
+/// Phase 3 — Networked resource node and build-site data.
+///
+/// Networking behaviour:
+/// • Extends NetworkBehaviour so NGO tracks this scene object.
+///   ► Add a NetworkObject component to every MaterialsData GameObject in the scene
+///     for multiplayer sync. Solo play works without it (IsSpawned == false path).
+/// • NetCanDrop  — server-authoritative flag; clients read it to see availability.
+/// • NetBuildProgress — server-authoritative build count; all clients display it.
+/// • Fill() coroutine (respawn timer) only runs on the server so the cooldown is
+///   consistent; the result propagates automatically via NetworkVariable.
+/// </summary>
+public class MaterialsData : NetworkBehaviour
 {
+    // ── Inspector ─────────────────────────────────────────────────────────────
     public int maxMaterialsBuild;
     public GameObject obj;
     public MaterialsSO materialData;
@@ -16,12 +30,58 @@ public class MaterialsData : MonoBehaviour
     public TextMeshProUGUI needText;
     public GameObject parentText;
     public bool dropItems;
-    public bool canDrop = true;
+
+    // ── Networked state ───────────────────────────────────────────────────────
+    /// <summary>Server controls availability; all clients observe.</summary>
+    public readonly NetworkVariable<bool> NetCanDrop = new NetworkVariable<bool>(
+        true,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+
+    /// <summary>Server tracks build progress; all clients display it.</summary>
+    public readonly NetworkVariable<int> NetBuildProgress = new NetworkVariable<int>(
+        0,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+
+    // ── Local state (mirrors / fallback for solo) ─────────────────────────────
+    /// <summary>
+    /// Whether this resource can currently be collected.
+    /// Multiplayer: synced via NetCanDrop. Solo: local field.
+    /// </summary>
+    public bool canDrop
+    {
+        get => IsSpawned ? NetCanDrop.Value : _canDropLocal;
+        set
+        {
+            if (IsSpawned)
+            {
+                if (IsServer) NetCanDrop.Value = value;
+            }
+            else
+            {
+                _canDropLocal = value;
+            }
+        }
+    }
+
     public int currentElements = 10;
 
+    private bool _canDropLocal  = true;
     private bool _currentDeployed;
     private bool _coroutineExecuted;
     private GameObject _indicatorObject;
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// True when this machine should run authoritative logic
+    /// (the Fill respawn timer, build deploy).
+    /// Solo: always true. Multiplayer: only on the host/server.
+    /// </summary>
+    private bool IsServerSide => !IsSpawned || IsServer;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     void Start()
     {
@@ -32,36 +92,46 @@ public class MaterialsData : MonoBehaviour
         }
     }
 
+    public override void OnNetworkSpawn()
+    {
+        // When this node is spawned over the network, mirror the server's
+        // current canDrop value into the local indicator immediately.
+        _canDropLocal = NetCanDrop.Value;
+    }
+
     void Update()
     {
         if (dropItems && _indicatorObject != null)
             _indicatorObject.SetActive(canDrop);
 
-        // was || (OR): would NPE if only one text was assigned; both must be non-null
         if (currentText != null && needText != null)
         {
-            currentText.text = elementsInBuild.Count.ToString();
-            needText.text = maxMaterialsBuild.ToString();
+            // Prefer the networked build count on clients; fall back to local list count
+            int displayed = IsSpawned ? NetBuildProgress.Value : elementsInBuild.Count;
+            currentText.text = displayed.ToString();
+            needText.text    = maxMaterialsBuild.ToString();
         }
 
-        if (currentElements == 10 && dropItems && !_coroutineExecuted)
+        // Respawn timer — only server decides when resources come back
+        if (currentElements == 10 && dropItems && !_coroutineExecuted && IsServerSide)
             StartCoroutine(Fill(7));
 
-        if (prefabLand != null && elementsInBuild.Count == maxMaterialsBuild)
+        // Build completion — also only server triggers this
+        if (IsServerSide && prefabLand != null && elementsInBuild.Count == maxMaterialsBuild)
         {
             if (parentText != null)
             {
                 LeanTween.scale(parentText, Vector3.zero, .2f);
                 Destroy(transform.GetChild(0).gameObject);
                 Destroy(parentText);
-                parentText = null; // prevent re-entry next frame before Unity finalizes Destroy
+                parentText = null;
             }
 
             if (_currentDeployed)
             {
                 for (int i = 0; i < elementsInBuild.Count; i++)
                     Destroy(elementsInBuild[i]);
-                elementsInBuild.Clear(); // stop re-processing next frame
+                elementsInBuild.Clear();
                 return;
             }
 
@@ -69,9 +139,17 @@ public class MaterialsData : MonoBehaviour
         }
     }
 
+    /// <summary>Called by PlayerController when a resource is deposited here.</summary>
+    public void RegisterBuildDeposit()
+    {
+        if (!IsServerSide) return; // clients call ServerRpc on PlayerController instead
+        if (IsSpawned) NetBuildProgress.Value = elementsInBuild.Count;
+    }
+
+    // ── Private ───────────────────────────────────────────────────────────────
+
     void DeployLand()
     {
-        // _isDeploying guard was redundant — this is only reached when !_currentDeployed
         limit.enabled = false;
         LeanTween.scale(prefabLand, Vector3.one, .3f).setEaseInCirc();
         _currentDeployed = true;
@@ -80,11 +158,10 @@ public class MaterialsData : MonoBehaviour
     private IEnumerator Fill(int time)
     {
         _coroutineExecuted = true;
-        canDrop = false;
-        currentElements = 10;
+        canDrop            = false;   // writes NetCanDrop on server, _canDropLocal in solo
+        currentElements    = 10;
 
         LeanTween.cancel(obj);
-        // Brief pop-up, then spin + collapse — feels like the resource "used up"
         LeanTween.scale(obj, Vector3.one * 1.3f, 0.08f).setEaseOutQuad().setOnComplete(() =>
         {
             LeanTween.rotateAround(obj, Vector3.up, 180f, 0.2f);
@@ -93,13 +170,13 @@ public class MaterialsData : MonoBehaviour
 
         yield return new WaitForSeconds(time);
 
-        // Bounce in with full spin — resource has "respawned"
+        // Resource respawned
         obj.transform.localScale = Vector3.zero;
         LeanTween.rotateAround(obj, Vector3.up, 360f, 0.45f).setEaseOutQuad();
         LeanTween.scale(obj, Vector3.one, 0.45f).setEaseOutBack();
 
-        canDrop = true;
+        canDrop            = true;
         _coroutineExecuted = false;
-        currentElements = 0;
+        currentElements    = 0;
     }
 }

@@ -1,5 +1,10 @@
 {
   "dependencies": {
+    "com.unity.netcode.gameobjects": "2.1.1",
+    "com.unity.services.core": "1.12.5",
+    "com.unity.services.authentication": "3.3.3",
+    "com.unity.services.relay": "1.1.1",
+    "com.unity.services.lobby": "1.2.2",
     "com.unity.2d.sprite": "1.0.0",
     "com.unity.ai.navigation": "2.0.12",
     "com.unity.cinemachine": "3.1.6",
