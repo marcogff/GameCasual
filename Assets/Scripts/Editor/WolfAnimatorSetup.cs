@@ -7,54 +7,42 @@ using UnityEditor.Animations;
 /// <summary>
 /// Menu: Tools → Setup Wolf Animator
 ///
-/// Scans wolf.fbx for embedded animation clips (they share the same rig,
-/// so bindings are always correct). Auto-detects idle and run clips by name,
-/// builds the AnimatorController, and assigns it to the Wolf prefab.
+/// Root cause of "(Missing!)" bones and silent animation failures:
+///   1. The Animator had no Avatar assigned (m_Avatar = null).
+///      Generic rigs REQUIRE an Avatar to map animation curves to bones.
+///   2. Previous setup runs accidentally used idle.fbx / run.fbx clips
+///      which belong to a different rig ("Root") — not the wolf's rig.
 ///
-/// Also run  Tools → List Wolf Clips  to see every clip available.
+/// This tool fixes both in one click:
+///   • Loads the Avatar embedded inside wolf.fbx and assigns it
+///   • Uses ONLY clips from wolf.fbx (wolf_rig|idle, wolf_rig|running)
+///   • Adds Speed (Float) parameter + transitions to the controller
+///   • Saves the Wolf prefab
+///
+/// Run  Tools → List Wolf Clips  first to see every clip name available.
 /// </summary>
 public static class WolfAnimatorSetup
 {
-    private const string WolfFbxPath     = "Assets/Art/Models/Wolf/source/wolf.fbx";
-    private const string ControllerPath  = "Assets/Art/Animations 1/Wolf/WolfAnimator.controller";
-    private const string WolfPrefabPath  = "Assets/Prefabs/Wolf.prefab";
-    public  const string SpeedParam      = "Speed";
+    // ── Asset paths ──────────────────────────────────────────────────────────
+    private const string WolfFbxPath    = "Assets/Art/Models/Wolf/source/wolf.fbx";
+    private const string ControllerPath = "Assets/Art/Animations 1/Wolf/WolfAnimator.controller";
+    private const string WolfPrefabPath = "Assets/Prefabs/Wolf.prefab";
+    public  const string SpeedParam     = "Speed";
 
-    // ── Diagnostic: list every clip in wolf.fbx ──────────────────────────────
+    // ── Diagnostic ───────────────────────────────────────────────────────────
     [MenuItem("Tools/List Wolf Clips")]
     public static void ListClips()
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"[WolfAnimator] Clips inside '{WolfFbxPath}':");
+        sb.AppendLine($"=== Clips in '{WolfFbxPath}' ===");
+        foreach (var c in GetAllClips(WolfFbxPath))
+            sb.AppendLine($"  '{c.name}'  {c.length:F2}s  loop={c.isLooping}");
 
-        var clips = GetAllClips(WolfFbxPath);
-        if (clips.Length == 0)
-        {
-            sb.AppendLine("  (none — the FBX has no embedded animations)");
-        }
-        else
-        {
-            foreach (var c in clips)
-                sb.AppendLine($"  '{c.name}'  length={c.length:F2}s  loop={c.isLooping}");
-        }
-
-        // Also check the separate animation FBX files as fallback info
-        string[] extraFbx =
-        {
-            "Assets/Art/Animations 1/idle.fbx",
-            "Assets/Art/Animations 1/run.fbx",
-            "Assets/Art/Animations 1/jump.fbx",
-        };
-        foreach (var path in extraFbx)
-        {
-            var extra = GetAllClips(path);
-            if (extra.Length > 0)
-            {
-                sb.AppendLine($"\n[WolfAnimator] Clips inside '{path}':");
-                foreach (var c in extra)
-                    sb.AppendLine($"  '{c.name}'  length={c.length:F2}s  loop={c.isLooping}");
-            }
-        }
+        // Also report Avatar
+        var avatar = GetAvatar(WolfFbxPath);
+        sb.AppendLine(avatar != null
+            ? $"\nAvatar found: '{avatar.name}'"
+            : "\nNo Avatar found in wolf.fbx — rig type may not be Generic/Humanoid.");
 
         Debug.Log(sb.ToString());
     }
@@ -63,40 +51,38 @@ public static class WolfAnimatorSetup
     [MenuItem("Tools/Setup Wolf Animator")]
     public static void Setup()
     {
-        // ── Find idle and run clips ──────────────────────────────────────────
-        // Priority: wolf.fbx (same rig = correct bindings)
-        // Fallback:  separate FBX files (may have rig mismatch)
-        AnimationClip idleClip = FindClip(WolfFbxPath, "idle", "Idle", "IDLE", "stand", "Stand");
-        AnimationClip runClip  = FindClip(WolfFbxPath, "run",  "Run",  "RUN",  "walk", "Walk");
-
-        string idleSource = WolfFbxPath;
-        string runSource  = WolfFbxPath;
-
-        if (idleClip == null)
-        {
-            idleClip   = GetFirstClip("Assets/Art/Animations 1/idle.fbx");
-            idleSource = "idle.fbx";
-        }
-        if (runClip == null)
-        {
-            runClip   = GetFirstClip("Assets/Art/Animations 1/run.fbx");
-            runSource = "run.fbx";
-        }
+        // ── 1. Load animation clips from wolf.fbx only ───────────────────────
+        // wolf.fbx clips are named "wolf_rig|idle", "wolf_rig|running", etc.
+        // Using clips from any other FBX causes "(Missing!)" because the bone
+        // paths don't match the wolf model's skeleton.
+        var idleClip = FindClip(WolfFbxPath, "idle",    "Idle",    "IDLE",
+                                             "stand",   "Stand");
+        var runClip  = FindClip(WolfFbxPath, "running", "Running", "run",
+                                             "Run",     "RUN",     "walk", "Walk");
 
         if (idleClip == null || runClip == null)
         {
             Debug.LogError(
-                "[WolfAnimatorSetup] Could not find idle or run clips.\n" +
-                "Run  Tools → List Wolf Clips  to see what names are available,\n" +
-                "then update the name list in FindClip() to match.");
+                "[WolfAnimatorSetup] Could not find idle or run clips in wolf.fbx.\n" +
+                "Run  Tools → List Wolf Clips  to see the exact names, then add them\n" +
+                "to the keyword list inside WolfAnimatorSetup.cs → Setup().");
             return;
         }
 
-        Debug.Log($"[WolfAnimatorSetup] Using:\n" +
-                  $"  Idle → '{idleClip.name}' from {idleSource}\n" +
-                  $"  Run  → '{runClip.name}'  from {runSource}");
+        Debug.Log($"[WolfAnimatorSetup] Clips resolved:\n" +
+                  $"  Idle → '{idleClip.name}'\n" +
+                  $"  Run  → '{runClip.name}'");
 
-        // ── Load / validate controller ───────────────────────────────────────
+        // ── 2. Load Avatar from wolf.fbx ─────────────────────────────────────
+        // Generic rigs need the Avatar to map animation curves to bones.
+        // Without it the Animator silently plays nothing.
+        var avatar = GetAvatar(WolfFbxPath);
+        if (avatar == null)
+            Debug.LogWarning("[WolfAnimatorSetup] No Avatar found in wolf.fbx. " +
+                             "Animations may still not play. Open the wolf.fbx importer, " +
+                             "set Rig → Animation Type → Generic, click Apply.");
+
+        // ── 3. Configure controller ──────────────────────────────────────────
         var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
         if (controller == null)
         {
@@ -104,12 +90,11 @@ public static class WolfAnimatorSetup
             return;
         }
 
-        // ── Parameters ──────────────────────────────────────────────────────
+        // Clear everything and rebuild from scratch
         while (controller.parameters.Length > 0)
             controller.RemoveParameter(0);
         controller.AddParameter(SpeedParam, AnimatorControllerParameterType.Float);
 
-        // ── States ──────────────────────────────────────────────────────────
         var sm = controller.layers[0].stateMachine;
         foreach (var s in sm.states.ToArray())
             sm.RemoveState(s.state);
@@ -121,7 +106,6 @@ public static class WolfAnimatorSetup
         var runState    = sm.AddState("Run");
         runState.motion  = runClip;
 
-        // ── Transitions ──────────────────────────────────────────────────────
         var toRun = idleState.AddTransition(runState);
         toRun.AddCondition(AnimatorConditionMode.Greater, 0.1f, SpeedParam);
         toRun.hasExitTime = false;
@@ -135,22 +119,31 @@ public static class WolfAnimatorSetup
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();
 
-        // ── Assign to Wolf prefab ────────────────────────────────────────────
+        // ── 4. Assign controller AND Avatar to Wolf prefab ───────────────────
         var wolfPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(WolfPrefabPath);
         if (wolfPrefab == null)
         {
             Debug.LogWarning($"[WolfAnimatorSetup] Prefab not found at '{WolfPrefabPath}'. " +
-                             "Assign WolfAnimator.controller to the Animator manually.");
+                             "Assign the controller and Avatar manually.");
         }
         else
         {
+            bool changed = false;
             foreach (var anim in wolfPrefab.GetComponentsInChildren<Animator>(true))
             {
                 anim.runtimeAnimatorController = controller;
+                if (avatar != null)
+                    anim.avatar = avatar;
                 EditorUtility.SetDirty(anim);
-                Debug.Log($"[WolfAnimatorSetup] Controller assigned to '{anim.gameObject.name}'.");
+                Debug.Log($"[WolfAnimatorSetup] '{anim.gameObject.name}' → " +
+                          $"controller='{controller.name}'  avatar='{avatar?.name ?? "null"}'");
+                changed = true;
             }
-            PrefabUtility.SavePrefabAsset(wolfPrefab);
+
+            if (changed)
+                PrefabUtility.SavePrefabAsset(wolfPrefab);
+            else
+                Debug.LogWarning("[WolfAnimatorSetup] No Animator component found in Wolf prefab.");
         }
 
         AssetDatabase.Refresh();
@@ -159,25 +152,17 @@ public static class WolfAnimatorSetup
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    // Returns the first clip whose name contains any of the keywords (case-sensitive).
     static AnimationClip FindClip(string fbxPath, params string[] keywords)
-    {
-        return GetAllClips(fbxPath)
-            .FirstOrDefault(c => keywords.Any(k => c.name.Contains(k)));
-    }
+        => GetAllClips(fbxPath).FirstOrDefault(c => keywords.Any(k => c.name.Contains(k)));
 
-    // Returns every real (non-preview) AnimationClip embedded in an FBX.
     static AnimationClip[] GetAllClips(string fbxPath)
-    {
-        return AssetDatabase.LoadAllAssetsAtPath(fbxPath)
+        => AssetDatabase.LoadAllAssetsAtPath(fbxPath)
             .OfType<AnimationClip>()
             .Where(c => !c.name.StartsWith("__preview__"))
             .ToArray();
-    }
 
-    // Returns the first real clip in an FBX regardless of name.
-    static AnimationClip GetFirstClip(string fbxPath)
-    {
-        return GetAllClips(fbxPath).FirstOrDefault();
-    }
+    static Avatar GetAvatar(string fbxPath)
+        => AssetDatabase.LoadAllAssetsAtPath(fbxPath)
+            .OfType<Avatar>()
+            .FirstOrDefault();
 }
