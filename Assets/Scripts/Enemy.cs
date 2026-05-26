@@ -4,66 +4,55 @@ using UnityEngine;
 public class Enemy : MonoBehaviour
 {
     // ── Tunable parameters ──────────────────────────────────────────────────
-    [SerializeField] private float  _wanderSpeed     = 2f;
-    [SerializeField] private float  _chaseSpeed      = 5f;
-    [SerializeField] private float  _wanderRadius    = 6f;
-    [SerializeField] private float  _detectionRange  = 8f;   // starts chasing
-    [SerializeField] private float  _loseRange       = 13f;  // gives up chasing
-    [SerializeField] private float  _stealRange      = 1.5f; // must be this close to steal
-    [SerializeField] private float  _scareRange      = 3.5f; // player charging inside = scared
-    [SerializeField] private float  _scaredDuration  = 8f;
-    [SerializeField] private int    _stealAmount     = 5;
-    [SerializeField] private float  _stealCooldown   = 4f;
+    [SerializeField] private float _wanderSpeed    = 2f;
+    [SerializeField] private float _chaseSpeed     = 5f;
+    [SerializeField] private float _wanderRadius   = 6f;
+    [SerializeField] private float _detectionRange = 8f;
+    [SerializeField] private float _loseRange      = 13f;
+    [SerializeField] private float _stealRange     = 1.5f;
+    [SerializeField] private float _scareRange     = 3.5f;
+    [SerializeField] private float _scaredDuration = 8f;
+    [SerializeField] private int   _stealAmount    = 5;
+    [SerializeField] private float _stealCooldown  = 4f;
 
-    // Name of the Animator parameter that switches run ↔ idle.
-    // Must match WolfAnimatorSetup.SpeedParam ("Speed").
-    // On Start the Console prints every parameter found — check there if
-    // animations still don't play.
-    [SerializeField] private string _runParam        = "Speed";
-
-    // ── State ────────────────────────────────────────────────────────────────
+    // ── State machine ────────────────────────────────────────────────────────
     private enum State { Wander, Chase, Scared, Returning }
     private State _state = State.Wander;
 
     [HideInInspector] public Transform spawnPoint;
 
+    // ── Components ───────────────────────────────────────────────────────────
     private CharacterController _cc;
     private Animator            _animator;
-    private int                 _runParamHash;
-    // True = drive with SetBool, False = drive with SetFloat (Speed-style blend trees)
-    private bool                _animParamIsBool = true;
+    private Transform           _player;
+    private PlayerController    _playerCtrl;
 
-    private Transform        _player;
-    private PlayerController _playerCtrl;
-
+    // ── Internal ─────────────────────────────────────────────────────────────
     private Vector3 _wanderTarget;
     private float   _nextWanderTime;
-    private float   _lastStealTime = -99f;
-
-    // Accumulated vertical velocity — lets gravity build up correctly
-    // instead of being reset to Gravity*dt every frame.
-    private float _verticalVelocity;
-
-    // Set by MoveToward() each frame so the animation sync doesn't have to
-    // rely on CharacterController.velocity, which can read near-zero even
-    // while the enemy is moving (CC reports actual displacement, not intent).
-    private float _currentSpeed;
+    private float   _lastStealTime  = -99f;
+    private float   _verticalVelocity;
+    private bool    _isMoving;          // true while MoveToward() is called this frame
+    private bool    _wasMoving;         // previous frame — avoids calling CrossFade every frame
 
     private const float Gravity       = -15f;
     private const float StealPopScale = 1.4f;
     private const float StealPopTime  = 0.12f;
 
-    // ── Lifecycle ────────────────────────────────────────────────────────────
+    // Animation state names — must match what WolfAnimatorSetup creates
+    private const string AnimIdle = "Idle";
+    private const string AnimRun  = "Run";
+
+    // ── Start ────────────────────────────────────────────────────────────────
 
     void Start()
     {
-        _cc = GetComponent<CharacterController>();
-
-        // Animator may live on a child (the actual mesh/rig), search children too
+        _cc       = GetComponent<CharacterController>();
         _animator = GetComponentInChildren<Animator>();
-        SetupAnimator();
 
-        // IMPORTANT: The player GameObject must have the "Player" tag set in Unity.
+        if (_animator == null)
+            Debug.LogWarning($"[Enemy] '{name}': No Animator found.");
+
         var playerGO = GameObject.FindWithTag(Tags.Player);
         if (playerGO != null)
         {
@@ -72,72 +61,20 @@ public class Enemy : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("[Enemy] No GameObject with tag 'Player' found. " +
-                             "Select your player in the Hierarchy → Inspector → Tag → Player.");
+            Debug.LogWarning("[Enemy] Player not found — set the player's Tag to 'Player'.");
         }
 
         SnapToGround();
         PickWanderTarget();
     }
 
-    // Inspects the Animator Controller, logs every parameter so the correct name
-    // is visible in the Console, then resolves which type to drive (bool / float).
-    void SetupAnimator()
-    {
-        if (_animator == null)
-        {
-            Debug.LogWarning($"[Enemy] '{name}': No Animator found on this GameObject or its children.");
-            return;
-        }
-
-        // ── Print every parameter so you can copy the exact name ──────────
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"[Enemy] '{name}': Animator found on '{_animator.gameObject.name}'. Parameters:");
-        foreach (var p in _animator.parameters)
-            sb.AppendLine($"  name='{p.name}'  type={p.type}");
-        Debug.Log(sb.ToString());
-
-        // ── Find the configured parameter ──────────────────────────────────
-        _runParamHash = Animator.StringToHash(_runParam);
-        bool found = false;
-        foreach (var p in _animator.parameters)
-        {
-            if (p.nameHash != _runParamHash) continue;
-            found = true;
-            _animParamIsBool = p.type == AnimatorControllerParameterType.Bool;
-            Debug.Log($"[Enemy] '{name}': Using '{p.name}' as {(p.type)} for run/idle.");
-            break;
-        }
-
-        if (!found)
-            Debug.LogWarning($"[Enemy] '{name}': Parameter '{_runParam}' not found in the Animator Controller. " +
-                             "Check the 'Run Param' field on the Enemy component and match it to one of the names logged above.");
-    }
-
-    // Raycasts straight down and repositions the enemy flush with the ground.
-    // Runs once on Start so floating/clipping caused by spawner Y-offset or
-    // CharacterController center mismatch is corrected before the first frame.
-    void SnapToGround()
-    {
-        // Temporarily disable the CC so we can teleport the transform directly
-        _cc.enabled = false;
-
-        Vector3 origin = transform.position + Vector3.up * 5f;
-        if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 30f))
-        {
-            Vector3 p = transform.position;
-            p.y = hit.point.y;
-            transform.position = p;
-        }
-
-        _cc.enabled = true;
-    }
+    // ── Update ───────────────────────────────────────────────────────────────
 
     void Update()
     {
         if (_player == null || _playerCtrl == null) return;
 
-        _currentSpeed = 0f; // MoveToward() overwrites this when called
+        _isMoving = false;  // MoveToward() sets this to true when called
 
         switch (_state)
         {
@@ -147,20 +84,17 @@ public class Enemy : MonoBehaviour
             case State.Returning: UpdateReturning(); break;
         }
 
-        // ── Animation sync ──────────────────────────────────────────────────
-        // _currentSpeed is the intended movement speed set by MoveToward().
-        // Using _cc.velocity here was unreliable — CC reports actual post-
-        // collision displacement which can be near-zero even while moving.
-        if (_animator != null)
+        // ── Animation ───────────────────────────────────────────────────────
+        // CrossFade by state NAME — no parameters, no hashes, no type guessing.
+        // Only call it when the moving state actually changes to avoid spamming.
+        if (_animator != null && _isMoving != _wasMoving)
         {
-            if (_animParamIsBool)
-                _animator.SetBool(_runParamHash, _currentSpeed > 0.1f);
-            else
-                _animator.SetFloat(_runParamHash, _currentSpeed);
+            _animator.CrossFade(_isMoving ? AnimRun : AnimIdle, 0.15f);
+            _wasMoving = _isMoving;
         }
     }
 
-    // ── Wander ───────────────────────────────────────────────────────────────
+    // ── States ───────────────────────────────────────────────────────────────
 
     void UpdateWander()
     {
@@ -185,27 +119,22 @@ public class Enemy : MonoBehaviour
         _nextWanderTime = Time.time + Random.Range(3f, 6f);
     }
 
-    // ── Chase ────────────────────────────────────────────────────────────────
-
     void UpdateChase()
     {
         float dist = Vector3.Distance(transform.position, _player.position);
 
-        // Player dropped everything or ran away — go back to wandering
         if (!_playerCtrl.hasMat || dist > _loseRange)
         {
             _state = State.Wander;
             return;
         }
 
-        // Scared if player charges at us
         if (dist < _scareRange && IsPlayerChargingAtMe())
         {
             StartCoroutine(ScaredRoutine());
             return;
         }
 
-        // Close enough — try to steal
         if (dist <= _stealRange && Time.time - _lastStealTime >= _stealCooldown)
         {
             TrySteal();
@@ -217,11 +146,8 @@ public class Enemy : MonoBehaviour
 
     bool IsPlayerChargingAtMe()
     {
-        // The player's own CharacterController doesn't store velocity (movement is
-        // applied to the ghost targetTransform). Use that velocity instead.
         Vector3 vel = _playerCtrl.targetTransform.velocity;
         if (vel.magnitude < 2.5f) return false;
-
         Vector3 toEnemy = (transform.position - _player.position).normalized;
         return Vector3.Dot(vel.normalized, toEnemy) > 0.7f;
     }
@@ -230,55 +156,45 @@ public class Enemy : MonoBehaviour
     {
         _lastStealTime = Time.time;
 
-        int woodCount = _playerCtrl.currentElementsWood.Count;
-        int fishCount = _playerCtrl.currentElementsFish.Count;
-        int total     = woodCount + fishCount;
+        int wood  = _playerCtrl.currentElementsWood.Count;
+        int fish  = _playerCtrl.currentElementsFish.Count;
+        int total = wood + fish;
 
-        // Nothing left to steal — head home
-        if (total == 0)
-        {
-            _state = State.Returning;
-            return;
-        }
+        if (total == 0) { _state = State.Returning; return; }
 
-        // Steal from whichever pile is bigger
         int amount = Mathf.Min(_stealAmount, total);
-        if (fishCount >= woodCount)
+        if (fish >= wood)
         {
-            int take = Mathf.Min(amount, fishCount);
+            int take = Mathf.Min(amount, fish);
             for (int i = 0; i < take; i++)
             {
-                GameObject item = _playerCtrl.currentElementsFish[0];
+                Destroy(_playerCtrl.currentElementsFish[0]);
                 _playerCtrl.currentElementsFish.RemoveAt(0);
-                Destroy(item);
             }
         }
         else
         {
-            int take = Mathf.Min(amount, woodCount);
+            int take = Mathf.Min(amount, wood);
             for (int i = 0; i < take; i++)
             {
-                GameObject item = _playerCtrl.currentElementsWood[0];
+                Destroy(_playerCtrl.currentElementsWood[0]);
                 _playerCtrl.currentElementsWood.RemoveAt(0);
-                Destroy(item);
             }
         }
 
-        // Squash-and-stretch celebration then run home
         LeanTween.cancel(gameObject);
-        LeanTween.scale(gameObject, new Vector3(StealPopScale, 1f / StealPopScale, StealPopScale), StealPopTime)
+        LeanTween.scale(gameObject,
+            new Vector3(StealPopScale, 1f / StealPopScale, StealPopScale), StealPopTime)
             .setEaseOutQuad()
-            .setOnComplete(() => LeanTween.scale(gameObject, Vector3.one, StealPopTime * 2f).setEaseOutBack());
+            .setOnComplete(() =>
+                LeanTween.scale(gameObject, Vector3.one, StealPopTime * 2f).setEaseOutBack());
 
         _state = State.Returning;
     }
 
-    // ── Scared ───────────────────────────────────────────────────────────────
-
     IEnumerator ScaredRoutine()
     {
         _state = State.Scared;
-
         float endTime = Time.time + _scaredDuration;
         while (Time.time < endTime)
         {
@@ -286,18 +202,13 @@ public class Enemy : MonoBehaviour
             MoveToward(transform.position + fleeDir * 2f, _chaseSpeed * 1.5f);
             yield return null;
         }
-
         _state = State.Returning;
     }
-
-    // ── Returning ─────────────────────────────────────────────────────────────
 
     void UpdateReturning()
     {
         if (spawnPoint == null) { _state = State.Wander; return; }
-
         MoveToward(spawnPoint.position, _wanderSpeed);
-
         if (ReachedTarget(spawnPoint.position))
         {
             PickWanderTarget();
@@ -305,7 +216,7 @@ public class Enemy : MonoBehaviour
         }
     }
 
-    // ── Movement ──────────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     void MoveToward(Vector3 target, float speed)
     {
@@ -325,8 +236,7 @@ public class Enemy : MonoBehaviour
         move.y = _verticalVelocity;
         _cc.Move(move * Time.deltaTime);
 
-        // Record intended speed so Update's animation sync has a reliable value.
-        _currentSpeed = speed;
+        _isMoving = true;   // tells Update's animation block to play Run
     }
 
     bool ReachedTarget(Vector3 target)
@@ -334,6 +244,18 @@ public class Enemy : MonoBehaviour
         Vector3 flat = target - transform.position;
         flat.y = 0f;
         return flat.sqrMagnitude < 0.4f;
+    }
+
+    void SnapToGround()
+    {
+        _cc.enabled = false;
+        if (Physics.Raycast(transform.position + Vector3.up * 5f, Vector3.down, out RaycastHit hit, 30f))
+        {
+            Vector3 p = transform.position;
+            p.y = hit.point.y;
+            transform.position = p;
+        }
+        _cc.enabled = true;
     }
 
     // ── Gizmos ────────────────────────────────────────────────────────────────
