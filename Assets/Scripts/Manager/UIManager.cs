@@ -36,16 +36,24 @@ public class UIManager : MonoBehaviour
     {
         _woodText = _woodCanvas.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
         _fishText = _fishCanvas.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
-        _upgradePanelInner    = upgradePanel.transform.GetChild(0);
-        _upgradeButton        = _upgradePanelInner.GetChild(3).GetComponent<Button>();
+        _upgradePanelInner       = upgradePanel.transform.GetChild(0);
+        _upgradeButton           = _upgradePanelInner.GetChild(3).GetComponent<Button>();
         _upgradePanelInnerCanvas = _upgradePanelInner.GetComponent<CanvasGroup>();
-        _upgradePanelRect     = upgradePanel.GetComponent<RectTransform>();
+        _upgradePanelRect        = upgradePanel.GetComponent<RectTransform>();
 
         // Ensure ColorTint transition is active so disabled state greys out properly
         _upgradeButton.transition = Selectable.Transition.ColorTint;
         ColorBlock cb = _upgradeButton.colors;
         cb.disabledColor = new Color(0.45f, 0.45f, 0.45f, 0.8f);
         _upgradeButton.colors = cb;
+
+        // Panel starts off-screen and invisible — make sure it doesn't swallow clicks
+        _upgradePanelInnerCanvas.blocksRaycasts = false;
+        _upgradePanelInnerCanvas.interactable   = false;
+
+        // Black outline on resource counters so they read against any background colour
+        ApplyTextOutline(_woodText);
+        ApplyTextOutline(_fishText);
 
         if (_gameFont != null)
             ApplyFontToAll();
@@ -112,39 +120,46 @@ public class UIManager : MonoBehaviour
 
     public void ShowUpgradePanel(bool show)
     {
-        if (_panelOpen == show) return; // already in the requested state
+        if (show && _panelOpen) return; // don't re-open while already open
         _panelOpen = show;
 
-        // Cancel any in-progress tween on the panel before starting a new one
         LeanTween.cancel(_upgradePanelRect.gameObject);
 
         if (show)
         {
+            _upgradePanelInnerCanvas.blocksRaycasts = true;
+            _upgradePanelInnerCanvas.interactable   = true;
             LeanTween.moveX(_upgradePanelRect, 0, .35f).setEaseOutBack().setOnComplete(FadeInElements);
         }
         else
         {
-            // Stop the ping-pong scale animation on the button when panel closes
             LeanTween.cancel(_upgradeButton.gameObject);
             _upgradeButton.transform.localScale = Vector3.one;
             LeanTween.moveX(_upgradePanelRect, PanelOffscreenX, .35f).setEaseOutBack().setOnComplete(FadeOutElements);
         }
     }
 
-    // Call this from a close/back button in the upgrade panel UI
+    // Hard close — always works regardless of _panelOpen state.
+    // Assign this to the close/back button's OnClick in the inspector.
     public void CloseUpgradePanel()
     {
-        ShowUpgradePanel(false);
+        _panelOpen = false;
+        LeanTween.cancel(_upgradePanelRect.gameObject);
+        LeanTween.cancel(_upgradeButton.gameObject);
+        _upgradeButton.transform.localScale = Vector3.one;
+        LeanTween.moveX(_upgradePanelRect, PanelOffscreenX, .35f).setEaseOutBack().setOnComplete(FadeOutElements);
     }
 
     private void FadeInElements()
     {
-        LeanTween.alphaCanvas(_upgradePanelInnerCanvas, 1, 1f)
+        LeanTween.alphaCanvas(_upgradePanelInnerCanvas, 1, .4f)
             .setOnComplete(() => LeanTween.scale(_upgradeButton.gameObject, new Vector3(.9f, .9f, .9f), .4f).setLoopPingPong());
     }
 
     private void FadeOutElements()
     {
+        _upgradePanelInnerCanvas.blocksRaycasts = false;
+        _upgradePanelInnerCanvas.interactable   = false;
         LeanTween.alphaCanvas(_upgradePanelInnerCanvas, 0, .3f);
     }
 
@@ -153,5 +168,24 @@ public class UIManager : MonoBehaviour
     {
         foreach (var tmp in GetComponentsInChildren<TextMeshProUGUI>(includeInactive: true))
             tmp.font = _gameFont;
+    }
+
+    // Black outline + drop shadow so counter text is readable against any background.
+    // Uses fontMaterial (creates a per-instance material, won't affect other texts).
+    private static void ApplyTextOutline(TextMeshProUGUI text)
+    {
+        if (text == null) return;
+        text.color = Color.white;
+
+        var mat = text.fontMaterial; // creates material instance
+        mat.EnableKeyword("OUTLINE_ON");
+        mat.SetFloat(ShaderUtilities.ID_OutlineWidth, 0.25f);
+        mat.SetColor(ShaderUtilities.ID_OutlineColor, Color.black);
+
+        mat.EnableKeyword("UNDERLAY_ON");
+        mat.SetColor(ShaderUtilities.ID_UnderlayColor, new Color(0f, 0f, 0f, 0.8f));
+        mat.SetFloat(ShaderUtilities.ID_UnderlayOffsetX,  0.6f);
+        mat.SetFloat(ShaderUtilities.ID_UnderlayOffsetY, -0.6f);
+        mat.SetFloat(ShaderUtilities.ID_UnderlaySoftness, 0.05f);
     }
 }
