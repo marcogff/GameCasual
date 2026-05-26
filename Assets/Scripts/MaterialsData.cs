@@ -80,13 +80,24 @@ public class MaterialsData : MonoBehaviour
     private IEnumerator Fill(int time)
     {
         _coroutineExecuted = true;
-        LeanTween.scale(obj, Vector3.zero, .3f);
         canDrop = false;
         currentElements = 10;
 
+        LeanTween.cancel(obj);
+        // Brief pop-up, then spin + collapse — feels like the resource "used up"
+        LeanTween.scale(obj, Vector3.one * 1.3f, 0.08f).setEaseOutQuad().setOnComplete(() =>
+        {
+            LeanTween.rotateAround(obj, Vector3.up, 180f, 0.2f);
+            LeanTween.scale(obj, Vector3.zero, 0.22f).setEaseInBack();
+        });
+
         yield return new WaitForSeconds(time);
 
-        LeanTween.scale(obj, Vector3.one, .3f);
+        // Bounce in with full spin — resource has "respawned"
+        obj.transform.localScale = Vector3.zero;
+        LeanTween.rotateAround(obj, Vector3.up, 360f, 0.45f).setEaseOutQuad();
+        LeanTween.scale(obj, Vector3.one, 0.45f).setEaseOutBack();
+
         canDrop = true;
         _coroutineExecuted = false;
         currentElements = 0;

@@ -5,4 +5,6 @@ public static class Tags
     public const string Fish = "Fish";
     public const string UseMaterials = "UseMaterials";
     public const string UpgradeShop = "UpgradeShop";
+    public const string Player = "Player";
+    public const string Enemy = "Enemy";
 }
