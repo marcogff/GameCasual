@@ -68,7 +68,27 @@ public class Enemy : MonoBehaviour
                              "Select your player in the Hierarchy → Inspector → Tag → Player.");
         }
 
+        SnapToGround();
         PickWanderTarget();
+    }
+
+    // Raycasts straight down and repositions the enemy flush with the ground.
+    // Runs once on Start so floating/clipping caused by spawner Y-offset or
+    // CharacterController center mismatch is corrected before the first frame.
+    void SnapToGround()
+    {
+        // Temporarily disable the CC so we can teleport the transform directly
+        _cc.enabled = false;
+
+        Vector3 origin = transform.position + Vector3.up * 5f;
+        if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 30f))
+        {
+            Vector3 p = transform.position;
+            p.y = hit.point.y;
+            transform.position = p;
+        }
+
+        _cc.enabled = true;
     }
 
     void Update()
