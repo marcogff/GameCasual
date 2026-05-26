@@ -15,8 +15,9 @@ public class Enemy : MonoBehaviour
     [SerializeField] private int    _stealAmount     = 5;
     [SerializeField] private float  _stealCooldown   = 4f;
 
-    // Name of the Animator bool that switches run ↔ idle.
-    // Match it to whatever parameter your wolf Animator Controller uses.
+    // Name of the Animator parameter that switches run ↔ idle.
+    // On Start the Console will print ALL parameters found so you can
+    // copy-paste the exact name here if the default doesn't match.
     [SerializeField] private string _runParam        = "isRun";
 
     // ── State ────────────────────────────────────────────────────────────────
@@ -28,6 +29,8 @@ public class Enemy : MonoBehaviour
     private CharacterController _cc;
     private Animator            _animator;
     private int                 _runParamHash;
+    // True = drive with SetBool, False = drive with SetFloat (Speed-style blend trees)
+    private bool                _animParamIsBool = true;
 
     private Transform        _player;
     private PlayerController _playerCtrl;
@@ -52,8 +55,7 @@ public class Enemy : MonoBehaviour
 
         // Animator may live on a child (the actual mesh/rig), search children too
         _animator = GetComponentInChildren<Animator>();
-        if (_animator != null)
-            _runParamHash = Animator.StringToHash(_runParam);
+        SetupAnimator();
 
         // IMPORTANT: The player GameObject must have the "Player" tag set in Unity.
         var playerGO = GameObject.FindWithTag(Tags.Player);
@@ -70,6 +72,40 @@ public class Enemy : MonoBehaviour
 
         SnapToGround();
         PickWanderTarget();
+    }
+
+    // Inspects the Animator Controller, logs every parameter so the correct name
+    // is visible in the Console, then resolves which type to drive (bool / float).
+    void SetupAnimator()
+    {
+        if (_animator == null)
+        {
+            Debug.LogWarning($"[Enemy] '{name}': No Animator found on this GameObject or its children.");
+            return;
+        }
+
+        // ── Print every parameter so you can copy the exact name ──────────
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"[Enemy] '{name}': Animator found on '{_animator.gameObject.name}'. Parameters:");
+        foreach (var p in _animator.parameters)
+            sb.AppendLine($"  name='{p.name}'  type={p.type}");
+        Debug.Log(sb.ToString());
+
+        // ── Find the configured parameter ──────────────────────────────────
+        _runParamHash = Animator.StringToHash(_runParam);
+        bool found = false;
+        foreach (var p in _animator.parameters)
+        {
+            if (p.nameHash != _runParamHash) continue;
+            found = true;
+            _animParamIsBool = p.type == AnimatorControllerParameterType.Bool;
+            Debug.Log($"[Enemy] '{name}': Using '{p.name}' as {(p.type)} for run/idle.");
+            break;
+        }
+
+        if (!found)
+            Debug.LogWarning($"[Enemy] '{name}': Parameter '{_runParam}' not found in the Animator Controller. " +
+                             "Check the 'Run Param' field on the Enemy component and match it to one of the names logged above.");
     }
 
     // Raycasts straight down and repositions the enemy flush with the ground.
@@ -104,11 +140,14 @@ public class Enemy : MonoBehaviour
         }
 
         // ── Animation sync ──────────────────────────────────────────────────
-        // Use horizontal velocity only — vertical (gravity) would flicker at rest.
+        // Horizontal velocity only — vertical (gravity) would cause idle-flicker.
         if (_animator != null)
         {
-            Vector3 flatVel = new Vector3(_cc.velocity.x, 0f, _cc.velocity.z);
-            _animator.SetBool(_runParamHash, flatVel.sqrMagnitude > 0.05f);
+            float speed = new Vector3(_cc.velocity.x, 0f, _cc.velocity.z).magnitude;
+            if (_animParamIsBool)
+                _animator.SetBool(_runParamHash, speed > 0.1f);
+            else
+                _animator.SetFloat(_runParamHash, speed); // blend-tree style (Speed)
         }
     }
 
