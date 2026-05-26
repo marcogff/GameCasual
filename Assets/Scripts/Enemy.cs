@@ -4,16 +4,20 @@ using UnityEngine;
 public class Enemy : MonoBehaviour
 {
     // ── Tunable parameters ──────────────────────────────────────────────────
-    [SerializeField] private float _wanderSpeed      = 2f;
-    [SerializeField] private float _chaseSpeed       = 5f;
-    [SerializeField] private float _wanderRadius     = 6f;
-    [SerializeField] private float _detectionRange   = 8f;   // starts chasing
-    [SerializeField] private float _loseRange        = 13f;  // gives up chasing
-    [SerializeField] private float _stealRange       = 1.5f; // must be this close to steal
-    [SerializeField] private float _scareRange       = 3.5f; // player charging inside this = scared
-    [SerializeField] private float _scaredDuration   = 8f;
-    [SerializeField] private int   _stealAmount      = 5;
-    [SerializeField] private float _stealCooldown    = 4f;
+    [SerializeField] private float  _wanderSpeed     = 2f;
+    [SerializeField] private float  _chaseSpeed      = 5f;
+    [SerializeField] private float  _wanderRadius    = 6f;
+    [SerializeField] private float  _detectionRange  = 8f;   // starts chasing
+    [SerializeField] private float  _loseRange       = 13f;  // gives up chasing
+    [SerializeField] private float  _stealRange      = 1.5f; // must be this close to steal
+    [SerializeField] private float  _scareRange      = 3.5f; // player charging inside = scared
+    [SerializeField] private float  _scaredDuration  = 8f;
+    [SerializeField] private int    _stealAmount     = 5;
+    [SerializeField] private float  _stealCooldown   = 4f;
+
+    // Name of the Animator bool that switches run ↔ idle.
+    // Match it to whatever parameter your wolf Animator Controller uses.
+    [SerializeField] private string _runParam        = "isRun";
 
     // ── State ────────────────────────────────────────────────────────────────
     private enum State { Wander, Chase, Scared, Returning }
@@ -22,26 +26,46 @@ public class Enemy : MonoBehaviour
     [HideInInspector] public Transform spawnPoint;
 
     private CharacterController _cc;
-    private Transform _player;
-    private PlayerController _playerCtrl;
-    private Vector3 _wanderTarget;
-    private float _nextWanderTime;
-    private float _lastStealTime = -99f;
-    private bool _isScared;
+    private Animator            _animator;
+    private int                 _runParamHash;
 
-    private const float Gravity       = -9.81f;
+    private Transform        _player;
+    private PlayerController _playerCtrl;
+
+    private Vector3 _wanderTarget;
+    private float   _nextWanderTime;
+    private float   _lastStealTime = -99f;
+
+    // Accumulated vertical velocity — lets gravity build up correctly
+    // instead of being reset to Gravity*dt every frame.
+    private float _verticalVelocity;
+
+    private const float Gravity       = -15f;
     private const float StealPopScale = 1.4f;
     private const float StealPopTime  = 0.12f;
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────
 
     void Start()
     {
         _cc = GetComponent<CharacterController>();
 
+        // Animator may live on a child (the actual mesh/rig), search children too
+        _animator = GetComponentInChildren<Animator>();
+        if (_animator != null)
+            _runParamHash = Animator.StringToHash(_runParam);
+
+        // IMPORTANT: The player GameObject must have the "Player" tag set in Unity.
         var playerGO = GameObject.FindWithTag(Tags.Player);
         if (playerGO != null)
         {
             _player     = playerGO.transform;
             _playerCtrl = playerGO.GetComponent<PlayerController>();
+        }
+        else
+        {
+            Debug.LogWarning("[Enemy] No GameObject with tag 'Player' found. " +
+                             "Select your player in the Hierarchy → Inspector → Tag → Player.");
         }
 
         PickWanderTarget();
@@ -49,14 +73,22 @@ public class Enemy : MonoBehaviour
 
     void Update()
     {
-        if (_player == null) return;
+        if (_player == null || _playerCtrl == null) return;
 
         switch (_state)
         {
             case State.Wander:    UpdateWander();    break;
             case State.Chase:     UpdateChase();     break;
-            case State.Scared:                       break; // coroutine drives scared movement
+            case State.Scared:    /* coroutine */    break;
             case State.Returning: UpdateReturning(); break;
+        }
+
+        // ── Animation sync ──────────────────────────────────────────────────
+        // Use horizontal velocity only — vertical (gravity) would flicker at rest.
+        if (_animator != null)
+        {
+            Vector3 flatVel = new Vector3(_cc.velocity.x, 0f, _cc.velocity.z);
+            _animator.SetBool(_runParamHash, flatVel.sqrMagnitude > 0.05f);
         }
     }
 
@@ -79,9 +111,9 @@ public class Enemy : MonoBehaviour
 
     void PickWanderTarget()
     {
-        Vector2 circle = Random.insideUnitCircle * _wanderRadius;
-        Vector3 origin = spawnPoint != null ? spawnPoint.position : transform.position;
-        _wanderTarget  = origin + new Vector3(circle.x, 0f, circle.y);
+        Vector2 circle  = Random.insideUnitCircle * _wanderRadius;
+        Vector3 origin  = spawnPoint != null ? spawnPoint.position : transform.position;
+        _wanderTarget   = origin + new Vector3(circle.x, 0f, circle.y);
         _nextWanderTime = Time.time + Random.Range(3f, 6f);
     }
 
@@ -91,21 +123,21 @@ public class Enemy : MonoBehaviour
     {
         float dist = Vector3.Distance(transform.position, _player.position);
 
-        // Player no longer carrying anything, or ran too far away
+        // Player dropped everything or ran away — go back to wandering
         if (!_playerCtrl.hasMat || dist > _loseRange)
         {
             _state = State.Wander;
             return;
         }
 
-        // Check if player is charging at us
+        // Scared if player charges at us
         if (dist < _scareRange && IsPlayerChargingAtMe())
         {
             StartCoroutine(ScaredRoutine());
             return;
         }
 
-        // Close enough to steal
+        // Close enough — try to steal
         if (dist <= _stealRange && Time.time - _lastStealTime >= _stealCooldown)
         {
             TrySteal();
@@ -117,11 +149,9 @@ public class Enemy : MonoBehaviour
 
     bool IsPlayerChargingAtMe()
     {
-        // Player's CharacterController velocity toward this enemy above a threshold
-        var playerCC = _player.GetComponent<CharacterController>();
-        if (playerCC == null) return false;
-
-        Vector3 vel = playerCC.velocity;
+        // The player's own CharacterController doesn't store velocity (movement is
+        // applied to the ghost targetTransform). Use that velocity instead.
+        Vector3 vel = _playerCtrl.targetTransform.velocity;
         if (vel.magnitude < 2.5f) return false;
 
         Vector3 toEnemy = (transform.position - _player.position).normalized;
@@ -131,12 +161,19 @@ public class Enemy : MonoBehaviour
     void TrySteal()
     {
         _lastStealTime = Time.time;
+
         int woodCount = _playerCtrl.currentElementsWood.Count;
         int fishCount = _playerCtrl.currentElementsFish.Count;
-        int total = woodCount + fishCount;
-        if (total == 0) return;
+        int total     = woodCount + fishCount;
 
-        // Steal from whichever resource the player has more of
+        // Nothing left to steal — head home
+        if (total == 0)
+        {
+            _state = State.Returning;
+            return;
+        }
+
+        // Steal from whichever pile is bigger
         int amount = Mathf.Min(_stealAmount, total);
         if (fishCount >= woodCount)
         {
@@ -159,13 +196,12 @@ public class Enemy : MonoBehaviour
             }
         }
 
-        // Squash-and-stretch celebration
+        // Squash-and-stretch celebration then run home
         LeanTween.cancel(gameObject);
         LeanTween.scale(gameObject, new Vector3(StealPopScale, 1f / StealPopScale, StealPopScale), StealPopTime)
             .setEaseOutQuad()
             .setOnComplete(() => LeanTween.scale(gameObject, Vector3.one, StealPopTime * 2f).setEaseOutBack());
 
-        // Run back to spawn
         _state = State.Returning;
     }
 
@@ -173,20 +209,17 @@ public class Enemy : MonoBehaviour
 
     IEnumerator ScaredRoutine()
     {
-        _state    = State.Scared;
-        _isScared = true;
+        _state = State.Scared;
 
         float endTime = Time.time + _scaredDuration;
         while (Time.time < endTime)
         {
-            // Flee directly away from player
             Vector3 fleeDir = (transform.position - _player.position).normalized;
             MoveToward(transform.position + fleeDir * 2f, _chaseSpeed * 1.5f);
             yield return null;
         }
 
-        _isScared = false;
-        _state    = State.Returning;
+        _state = State.Returning;
     }
 
     // ── Returning ─────────────────────────────────────────────────────────────
@@ -204,7 +237,7 @@ public class Enemy : MonoBehaviour
         }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── Movement ──────────────────────────────────────────────────────────────
 
     void MoveToward(Vector3 target, float speed)
     {
@@ -212,11 +245,19 @@ public class Enemy : MonoBehaviour
         dir.y = 0f;
 
         if (dir.sqrMagnitude > 0.01f)
-            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(dir), 0.15f);
+            transform.rotation = Quaternion.Slerp(
+                transform.rotation, Quaternion.LookRotation(dir), 0.15f);
 
-        Vector3 move = dir.normalized * speed * Time.deltaTime;
-        move.y = Gravity * Time.deltaTime; // simple gravity
-        _cc.Move(move);
+        // Accumulate gravity so the CC stays grounded — resetting each frame
+        // to Gravity*dt was the reason the enemy wasn't moving properly.
+        if (_cc.isGrounded)
+            _verticalVelocity = -1f; // small constant keeps it pressed to ground
+        else
+            _verticalVelocity += Gravity * Time.deltaTime;
+
+        Vector3 move = dir.normalized * speed;
+        move.y = _verticalVelocity;
+        _cc.Move(move * Time.deltaTime);
     }
 
     bool ReachedTarget(Vector3 target)
