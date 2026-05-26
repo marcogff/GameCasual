@@ -44,6 +44,11 @@ public class Enemy : MonoBehaviour
     // instead of being reset to Gravity*dt every frame.
     private float _verticalVelocity;
 
+    // Set by MoveToward() each frame so the animation sync doesn't have to
+    // rely on CharacterController.velocity, which can read near-zero even
+    // while the enemy is moving (CC reports actual displacement, not intent).
+    private float _currentSpeed;
+
     private const float Gravity       = -15f;
     private const float StealPopScale = 1.4f;
     private const float StealPopTime  = 0.12f;
@@ -132,6 +137,8 @@ public class Enemy : MonoBehaviour
     {
         if (_player == null || _playerCtrl == null) return;
 
+        _currentSpeed = 0f; // MoveToward() overwrites this when called
+
         switch (_state)
         {
             case State.Wander:    UpdateWander();    break;
@@ -141,14 +148,15 @@ public class Enemy : MonoBehaviour
         }
 
         // ── Animation sync ──────────────────────────────────────────────────
-        // Horizontal velocity only — vertical (gravity) would cause idle-flicker.
+        // _currentSpeed is the intended movement speed set by MoveToward().
+        // Using _cc.velocity here was unreliable — CC reports actual post-
+        // collision displacement which can be near-zero even while moving.
         if (_animator != null)
         {
-            float speed = new Vector3(_cc.velocity.x, 0f, _cc.velocity.z).magnitude;
             if (_animParamIsBool)
-                _animator.SetBool(_runParamHash, speed > 0.1f);
+                _animator.SetBool(_runParamHash, _currentSpeed > 0.1f);
             else
-                _animator.SetFloat(_runParamHash, speed); // blend-tree style (Speed)
+                _animator.SetFloat(_runParamHash, _currentSpeed);
         }
     }
 
@@ -308,16 +316,17 @@ public class Enemy : MonoBehaviour
             transform.rotation = Quaternion.Slerp(
                 transform.rotation, Quaternion.LookRotation(dir), 0.15f);
 
-        // Accumulate gravity so the CC stays grounded — resetting each frame
-        // to Gravity*dt was the reason the enemy wasn't moving properly.
         if (_cc.isGrounded)
-            _verticalVelocity = -1f; // small constant keeps it pressed to ground
+            _verticalVelocity = -1f;
         else
             _verticalVelocity += Gravity * Time.deltaTime;
 
         Vector3 move = dir.normalized * speed;
         move.y = _verticalVelocity;
         _cc.Move(move * Time.deltaTime);
+
+        // Record intended speed so Update's animation sync has a reliable value.
+        _currentSpeed = speed;
     }
 
     bool ReachedTarget(Vector3 target)
