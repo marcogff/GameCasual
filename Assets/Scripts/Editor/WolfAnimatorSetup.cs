@@ -90,31 +90,25 @@ public static class WolfAnimatorSetup
             return;
         }
 
-        // Clear everything and rebuild from scratch
+        // Clear everything — no parameters, no transitions.
+        // Enemy.cs drives all state switching via animator.CrossFade() by name.
+        // Parameter-based transitions caused Run→Idle to fire immediately because
+        // Speed was always 0 (CrossFade doesn't set any parameter).
         while (controller.parameters.Length > 0)
             controller.RemoveParameter(0);
-        controller.AddParameter(SpeedParam, AnimatorControllerParameterType.Float);
 
         var sm = controller.layers[0].stateMachine;
         foreach (var s in sm.states.ToArray())
             sm.RemoveState(s.state);
 
-        var idleState   = sm.AddState("Idle");
-        idleState.motion = idleClip;
-        sm.defaultState  = idleState;
+        // Two pure looping states — no outgoing transitions.
+        // CrossFade("Idle"/"Run", 0.15f) in Enemy.cs handles all switching.
+        var idleState    = sm.AddState("Idle");
+        idleState.motion  = idleClip;
+        sm.defaultState   = idleState;
 
-        var runState    = sm.AddState("Run");
-        runState.motion  = runClip;
-
-        var toRun = idleState.AddTransition(runState);
-        toRun.AddCondition(AnimatorConditionMode.Greater, 0.1f, SpeedParam);
-        toRun.hasExitTime = false;
-        toRun.duration    = 0.15f;
-
-        var toIdle = runState.AddTransition(idleState);
-        toIdle.AddCondition(AnimatorConditionMode.Less, 0.1f, SpeedParam);
-        toIdle.hasExitTime = false;
-        toIdle.duration    = 0.15f;
+        var runState     = sm.AddState("Run");
+        runState.motion   = runClip;
 
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();

@@ -35,6 +35,13 @@ public class Enemy : MonoBehaviour
     private bool    _isMoving;          // true while MoveToward() is called this frame
     private bool    _wasMoving;         // previous frame — avoids calling CrossFade every frame
 
+    // Stuck detection — if the wolf barely moved while it should be moving,
+    // it's probably blocked by a tree. Pick a new target.
+    private Vector3 _lastCheckedPos;
+    private float   _stuckTimer;
+    private const float StuckInterval  = 1.5f;  // check every N seconds
+    private const float StuckThreshold = 0.3f;  // must have moved at least this far
+
     private const float Gravity       = -15f;
     private const float StealPopScale = 1.4f;
     private const float StealPopTime  = 0.12f;
@@ -52,6 +59,10 @@ public class Enemy : MonoBehaviour
 
         if (_animator == null)
             Debug.LogWarning($"[Enemy] '{name}': No Animator found.");
+
+        // Prevent climbing trees and steep surfaces
+        _cc.slopeLimit  = 45f;
+        _cc.stepOffset  = 0.2f;  // only step over things shorter than 20 cm
 
         var playerGO = GameObject.FindWithTag(Tags.Player);
         if (playerGO != null)
@@ -84,9 +95,31 @@ public class Enemy : MonoBehaviour
             case State.Returning: UpdateReturning(); break;
         }
 
+        // ── Stuck detection ─────────────────────────────────────────────────
+        // If the wolf is supposed to be moving but hasn't gone anywhere in
+        // StuckInterval seconds, it's blocked by geometry (tree, rock, etc.).
+        // Pick a new wander target so it doesn't just push against the obstacle.
+        if (_isMoving)
+        {
+            _stuckTimer += Time.deltaTime;
+            if (_stuckTimer >= StuckInterval)
+            {
+                float moved = Vector3.Distance(transform.position, _lastCheckedPos);
+                if (moved < StuckThreshold)
+                    PickWanderTarget();          // unstick: new random destination
+                _lastCheckedPos = transform.position;
+                _stuckTimer = 0f;
+            }
+        }
+        else
+        {
+            _stuckTimer = 0f;
+            _lastCheckedPos = transform.position;
+        }
+
         // ── Animation ───────────────────────────────────────────────────────
-        // CrossFade by state NAME — no parameters, no hashes, no type guessing.
-        // Only call it when the moving state actually changes to avoid spamming.
+        // CrossFade by state NAME — no parameters, no type guessing.
+        // Only fire when the moving state changes to avoid restarting the clip.
         if (_animator != null && _isMoving != _wasMoving)
         {
             _animator.CrossFade(_isMoving ? AnimRun : AnimIdle, 0.15f);
