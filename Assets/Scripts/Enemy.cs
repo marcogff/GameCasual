@@ -70,9 +70,13 @@ public class Enemy : MonoBehaviour
         }
 
         if (!_agent.isOnNavMesh)
-            Debug.LogError("[Enemy] Wolf is NOT on the NavMesh! " +
-                           "Go to Window → AI → Navigation → Bake to bake the scene, " +
-                           "then make sure the wolf spawns on a walkable surface.");
+        {
+            Debug.LogError("[Enemy] Wolf is NOT on the NavMesh!\n" +
+                           "1. Select your terrain/ground → Inspector → Static dropdown → tick Navigation Static\n" +
+                           "2. Window → AI → Navigation → Bake tab → click Bake\n" +
+                           "3. Blue overlay appears on walkable surfaces — wolf will work after that.");
+            return;   // don't call PickWanderTarget — agent can't be used yet
+        }
 
         PickWanderTarget();
     }
@@ -82,6 +86,7 @@ public class Enemy : MonoBehaviour
     void Update()
     {
         if (_player == null || _playerCtrl == null) return;
+        if (!_agent.isOnNavMesh) return;   // NavMesh not baked yet — wait silently
 
         switch (_state)
         {
