@@ -1,68 +1,62 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.AI;
 
+[RequireComponent(typeof(NavMeshAgent))]
 public class Enemy : MonoBehaviour
 {
-    // ── Tunable parameters ──────────────────────────────────────────────────
+    // ── Inspector ────────────────────────────────────────────────────────────
+    [Header("Movement")]
     [SerializeField] private float _wanderSpeed    = 2f;
     [SerializeField] private float _chaseSpeed     = 5f;
-    [SerializeField] private float _wanderRadius   = 6f;
+    [SerializeField] private float _scaredSpeed    = 7f;
+    [SerializeField] private float _wanderRadius   = 8f;
+
+    [Header("Detection")]
     [SerializeField] private float _detectionRange = 8f;
     [SerializeField] private float _loseRange      = 13f;
     [SerializeField] private float _stealRange     = 1.5f;
     [SerializeField] private float _scareRange     = 3.5f;
-    [SerializeField] private float _scaredDuration = 8f;
+
+    [Header("Stealing")]
     [SerializeField] private int   _stealAmount    = 5;
     [SerializeField] private float _stealCooldown  = 4f;
+    [SerializeField] private float _scaredDuration = 6f;
 
-    // ── State machine ────────────────────────────────────────────────────────
+    // ── State ────────────────────────────────────────────────────────────────
     private enum State { Wander, Chase, Scared, Returning }
     private State _state = State.Wander;
 
     [HideInInspector] public Transform spawnPoint;
 
     // ── Components ───────────────────────────────────────────────────────────
-    private CharacterController _cc;
-    private Animator            _animator;
-    private Transform           _player;
-    private PlayerController    _playerCtrl;
+    private NavMeshAgent     _agent;
+    private Animator         _animator;
+    private Transform        _player;
+    private PlayerController _playerCtrl;
 
-    // ── Internal ─────────────────────────────────────────────────────────────
-    private Vector3 _wanderTarget;
-    private float   _nextWanderTime;
-    private float   _lastStealTime  = -99f;
-    private float   _verticalVelocity;
-    private bool    _isMoving;          // true while MoveToward() is called this frame
-    private bool    _wasMoving;         // previous frame — avoids calling CrossFade every frame
-
-    // Stuck detection — if the wolf barely moved while it should be moving,
-    // it's probably blocked by a tree. Pick a new target.
-    private Vector3 _lastCheckedPos;
-    private float   _stuckTimer;
-    private const float StuckInterval  = 1.5f;  // check every N seconds
-    private const float StuckThreshold = 0.3f;  // must have moved at least this far
-
-    private const float Gravity       = -15f;
-    private const float StealPopScale = 1.4f;
-    private const float StealPopTime  = 0.12f;
-
-    // Animation state names — must match what WolfAnimatorSetup creates
+    // ── Animation ────────────────────────────────────────────────────────────
+    private bool         _wasMoving;
     private const string AnimIdle = "Idle";
     private const string AnimRun  = "Run";
+
+    // ── Misc ─────────────────────────────────────────────────────────────────
+    private float _lastStealTime = -99f;
+    private const float StealPopScale = 1.4f;
+    private const float StealPopTime  = 0.12f;
 
     // ── Start ────────────────────────────────────────────────────────────────
 
     void Start()
     {
-        _cc       = GetComponent<CharacterController>();
+        _agent    = GetComponent<NavMeshAgent>();
         _animator = GetComponentInChildren<Animator>();
 
-        if (_animator == null)
-            Debug.LogWarning($"[Enemy] '{name}': No Animator found.");
-
-        // Prevent climbing trees and steep surfaces
-        _cc.slopeLimit  = 45f;
-        _cc.stepOffset  = 0.2f;  // only step over things shorter than 20 cm
+        // Tune agent so it feels responsive
+        _agent.speed         = _wanderSpeed;
+        _agent.acceleration  = 12f;
+        _agent.angularSpeed  = 360f;
+        _agent.stoppingDistance = 0.3f;
 
         var playerGO = GameObject.FindWithTag(Tags.Player);
         if (playerGO != null)
@@ -72,10 +66,14 @@ public class Enemy : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("[Enemy] Player not found — set the player's Tag to 'Player'.");
+            Debug.LogWarning("[Enemy] Player tag not set — select the player GameObject → Inspector → Tag → Player.");
         }
 
-        SnapToGround();
+        if (!_agent.isOnNavMesh)
+            Debug.LogError("[Enemy] Wolf is NOT on the NavMesh! " +
+                           "Go to Window → AI → Navigation → Bake to bake the scene, " +
+                           "then make sure the wolf spawns on a walkable surface.");
+
         PickWanderTarget();
     }
 
@@ -85,8 +83,6 @@ public class Enemy : MonoBehaviour
     {
         if (_player == null || _playerCtrl == null) return;
 
-        _isMoving = false;  // MoveToward() sets this to true when called
-
         switch (_state)
         {
             case State.Wander:    UpdateWander();    break;
@@ -95,36 +91,7 @@ public class Enemy : MonoBehaviour
             case State.Returning: UpdateReturning(); break;
         }
 
-        // ── Stuck detection ─────────────────────────────────────────────────
-        // If the wolf is supposed to be moving but hasn't gone anywhere in
-        // StuckInterval seconds, it's blocked by geometry (tree, rock, etc.).
-        // Pick a new wander target so it doesn't just push against the obstacle.
-        if (_isMoving)
-        {
-            _stuckTimer += Time.deltaTime;
-            if (_stuckTimer >= StuckInterval)
-            {
-                float moved = Vector3.Distance(transform.position, _lastCheckedPos);
-                if (moved < StuckThreshold)
-                    PickWanderTarget();          // unstick: new random destination
-                _lastCheckedPos = transform.position;
-                _stuckTimer = 0f;
-            }
-        }
-        else
-        {
-            _stuckTimer = 0f;
-            _lastCheckedPos = transform.position;
-        }
-
-        // ── Animation ───────────────────────────────────────────────────────
-        // CrossFade by state NAME — no parameters, no type guessing.
-        // Only fire when the moving state changes to avoid restarting the clip.
-        if (_animator != null && _isMoving != _wasMoving)
-        {
-            _animator.CrossFade(_isMoving ? AnimRun : AnimIdle, 0.15f);
-            _wasMoving = _isMoving;
-        }
+        SyncAnimation();
     }
 
     // ── States ───────────────────────────────────────────────────────────────
@@ -132,53 +99,74 @@ public class Enemy : MonoBehaviour
     void UpdateWander()
     {
         float dist = Vector3.Distance(transform.position, _player.position);
+
+        // Spot the player if they're carrying something
         if (dist <= _detectionRange && _playerCtrl.hasMat)
         {
-            _state = State.Chase;
+            _state       = State.Chase;
+            _agent.speed = _chaseSpeed;
             return;
         }
 
-        MoveToward(_wanderTarget, _wanderSpeed);
-
-        if (Time.time >= _nextWanderTime || ReachedTarget(_wanderTarget))
+        // Arrived — pick the next random stroll point
+        if (!_agent.pathPending && _agent.remainingDistance < 0.5f)
             PickWanderTarget();
     }
 
     void PickWanderTarget()
     {
-        Vector2 circle  = Random.insideUnitCircle * _wanderRadius;
-        Vector3 origin  = spawnPoint != null ? spawnPoint.position : transform.position;
-        _wanderTarget   = origin + new Vector3(circle.x, 0f, circle.y);
-        _nextWanderTime = Time.time + Random.Range(3f, 6f);
+        Vector3 origin = spawnPoint != null ? spawnPoint.position : transform.position;
+
+        // Try up to 8 times to land on a valid NavMesh position
+        for (int i = 0; i < 8; i++)
+        {
+            Vector2 circle   = Random.insideUnitCircle * _wanderRadius;
+            Vector3 candidate = origin + new Vector3(circle.x, 0f, circle.y);
+
+            if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, 3f, NavMesh.AllAreas))
+            {
+                _agent.SetDestination(hit.position);
+                return;
+            }
+        }
+
+        // Absolute fallback — just return to spawn
+        _agent.SetDestination(origin);
     }
 
     void UpdateChase()
     {
         float dist = Vector3.Distance(transform.position, _player.position);
 
+        // Give up if player put everything down or ran too far
         if (!_playerCtrl.hasMat || dist > _loseRange)
         {
-            _state = State.Wander;
+            _state       = State.Wander;
+            _agent.speed = _wanderSpeed;
+            PickWanderTarget();
             return;
         }
 
+        // Flee if the player is charging straight at us
         if (dist < _scareRange && IsPlayerChargingAtMe())
         {
             StartCoroutine(ScaredRoutine());
             return;
         }
 
+        // Steal when close enough
         if (dist <= _stealRange && Time.time - _lastStealTime >= _stealCooldown)
         {
             TrySteal();
             return;
         }
 
-        MoveToward(_player.position, _chaseSpeed);
+        _agent.SetDestination(_player.position);
     }
 
     bool IsPlayerChargingAtMe()
     {
+        // targetTransform is the ghost CC that holds the real player velocity
         Vector3 vel = _playerCtrl.targetTransform.velocity;
         if (vel.magnitude < 2.5f) return false;
         Vector3 toEnemy = (transform.position - _player.position).normalized;
@@ -187,13 +175,14 @@ public class Enemy : MonoBehaviour
 
     void TrySteal()
     {
-        _lastStealTime = Time.time;
+        _lastStealTime    = Time.time;
+        _agent.isStopped  = true;  // freeze while celebrating
 
         int wood  = _playerCtrl.currentElementsWood.Count;
         int fish  = _playerCtrl.currentElementsFish.Count;
         int total = wood + fish;
 
-        if (total == 0) { _state = State.Returning; return; }
+        if (total == 0) { StartReturning(); return; }
 
         int amount = Mathf.Min(_stealAmount, total);
         if (fish >= wood)
@@ -215,80 +204,73 @@ public class Enemy : MonoBehaviour
             }
         }
 
+        // Squash-and-stretch then run home
         LeanTween.cancel(gameObject);
         LeanTween.scale(gameObject,
             new Vector3(StealPopScale, 1f / StealPopScale, StealPopScale), StealPopTime)
             .setEaseOutQuad()
             .setOnComplete(() =>
-                LeanTween.scale(gameObject, Vector3.one, StealPopTime * 2f).setEaseOutBack());
+            {
+                LeanTween.scale(gameObject, Vector3.one, StealPopTime * 2f).setEaseOutBack();
+                StartReturning();
+            });
+    }
 
-        _state = State.Returning;
+    void StartReturning()
+    {
+        _state            = State.Returning;
+        _agent.isStopped  = false;
+        _agent.speed      = _wanderSpeed;
+
+        if (spawnPoint != null)
+            _agent.SetDestination(spawnPoint.position);
     }
 
     IEnumerator ScaredRoutine()
     {
-        _state = State.Scared;
-        float endTime = Time.time + _scaredDuration;
-        while (Time.time < endTime)
+        _state       = State.Scared;
+        _agent.speed = _scaredSpeed;
+
+        float end = Time.time + _scaredDuration;
+        while (Time.time < end)
         {
-            Vector3 fleeDir = (transform.position - _player.position).normalized;
-            MoveToward(transform.position + fleeDir * 2f, _chaseSpeed * 1.5f);
-            yield return null;
+            // Recalculate flee direction every half second
+            Vector3 fleeDir    = (transform.position - _player.position).normalized;
+            Vector3 fleeTarget = transform.position + fleeDir * 6f;
+
+            if (NavMesh.SamplePosition(fleeTarget, out NavMeshHit hit, 4f, NavMesh.AllAreas))
+                _agent.SetDestination(hit.position);
+
+            yield return new WaitForSeconds(0.5f);
         }
-        _state = State.Returning;
+
+        StartReturning();
     }
 
     void UpdateReturning()
     {
         if (spawnPoint == null) { _state = State.Wander; return; }
-        MoveToward(spawnPoint.position, _wanderSpeed);
-        if (ReachedTarget(spawnPoint.position))
+
+        if (!_agent.pathPending && _agent.remainingDistance < 0.5f)
         {
+            _state       = State.Wander;
+            _agent.speed = _wanderSpeed;
             PickWanderTarget();
-            _state = State.Wander;
         }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── Animation ────────────────────────────────────────────────────────────
 
-    void MoveToward(Vector3 target, float speed)
+    void SyncAnimation()
     {
-        Vector3 dir = target - transform.position;
-        dir.y = 0f;
+        if (_animator == null) return;
 
-        if (dir.sqrMagnitude > 0.01f)
-            transform.rotation = Quaternion.Slerp(
-                transform.rotation, Quaternion.LookRotation(dir), 0.15f);
+        // NavMeshAgent.velocity is reliable — no CC issues
+        bool isMoving = _agent.velocity.magnitude > 0.15f;
+        if (isMoving == _wasMoving) return;
 
-        if (_cc.isGrounded)
-            _verticalVelocity = -1f;
-        else
-            _verticalVelocity += Gravity * Time.deltaTime;
-
-        Vector3 move = dir.normalized * speed;
-        move.y = _verticalVelocity;
-        _cc.Move(move * Time.deltaTime);
-
-        _isMoving = true;   // tells Update's animation block to play Run
-    }
-
-    bool ReachedTarget(Vector3 target)
-    {
-        Vector3 flat = target - transform.position;
-        flat.y = 0f;
-        return flat.sqrMagnitude < 0.4f;
-    }
-
-    void SnapToGround()
-    {
-        _cc.enabled = false;
-        if (Physics.Raycast(transform.position + Vector3.up * 5f, Vector3.down, out RaycastHit hit, 30f))
-        {
-            Vector3 p = transform.position;
-            p.y = hit.point.y;
-            transform.position = p;
-        }
-        _cc.enabled = true;
+        _animator.CrossFade(isMoving ? AnimRun : AnimIdle, 0.15f);
+        _wasMoving = isMoving;
     }
 
     // ── Gizmos ────────────────────────────────────────────────────────────────
@@ -301,6 +283,8 @@ public class Enemy : MonoBehaviour
         Gizmos.DrawWireSphere(transform.position, _scareRange);
         Gizmos.color = Color.green;
         Gizmos.DrawWireSphere(transform.position, _stealRange);
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawWireSphere(transform.position, _loseRange);
     }
 #endif
 }
