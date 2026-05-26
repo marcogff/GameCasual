@@ -1,0 +1,62 @@
+# Unity — matches anywhere in the repo (covers both root and IncrementalGame/)
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Mm]emoryCaptures/
+[Uu]ser[Ss]ettings/
+
+# Asset Store tools (uncomment to ignore)
+# /IncrementalGame/Assets/AssetStoreTools*
+
+# JetBrains Rider plugin
+[Aa]ssets/Plugins/Editor/JetBrains*
+
+# IDE
+.vs/
+.idea/
+.consulo/
+ExportedObj/
+
+# Generated solution/project files
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Unity generated meta files for compiler outputs
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# Unity crash reports
+sysinfo.txt
+
+# Build outputs
+*.apk
+*.aab
+*.unitypackage
+*.app
+AndroidBuild/
+
+# Gradle
+.gradle/
+
+# Crashlytics
+crashlytics-build.properties
+
+# OS
+.DS_Store
+Thumbs.db
