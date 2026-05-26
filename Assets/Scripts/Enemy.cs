@@ -16,9 +16,10 @@ public class Enemy : MonoBehaviour
     [SerializeField] private float  _stealCooldown   = 4f;
 
     // Name of the Animator parameter that switches run ↔ idle.
-    // On Start the Console will print ALL parameters found so you can
-    // copy-paste the exact name here if the default doesn't match.
-    [SerializeField] private string _runParam        = "isRun";
+    // Must match WolfAnimatorSetup.SpeedParam ("Speed").
+    // On Start the Console prints every parameter found — check there if
+    // animations still don't play.
+    [SerializeField] private string _runParam        = "Speed";
 
     // ── State ────────────────────────────────────────────────────────────────
     private enum State { Wander, Chase, Scared, Returning }
