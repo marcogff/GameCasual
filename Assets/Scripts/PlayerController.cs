@@ -26,18 +26,26 @@ public class PlayerController : MonoBehaviour
     // Animation
     private static readonly int IsRunHash = Animator.StringToHash("isRun");
 
-    // Pickup animation constants
     private const float SpeedUpgradeAcceleration = 240f;
     private const float RunLerpFactor = 0.15f;
-    private const float PickupScaleSize = 2.5f;
-    private const float PickupScaleDuration = 0.04f;
-    private const float PickupMoveToBagDuration = 0.06f;
-    private const float PickupMoveToPlayerDuration = 0.08f;
-    private const float DeployScaleDuration = 0.03f;
-    private const float DeployMoveDuration = 0.1f;
     private const float VfxLifetime = 0.3f;
     private const float PlayerYOffset = 1f;
     private const int PlayerCapacity = 100;
+
+    // Pickup animation — spring pop → arc up → drop to bag → squish → fly to player
+    private const float PickupScaleSize    = 2.8f;   // initial pop size
+    private const float PickupScaleDuration = 0.08f; // spring pop (setEaseOutBack)
+    private const float PickupArcHeight    = 1.8f;   // world-units the item rises before falling to bag
+    private const float PickupArcUpTime    = 0.10f;  // time rising
+    private const float PickupArcDownTime  = 0.13f;  // time falling to bag
+    private const float PickupSquishScale  = 0.75f;  // squish factor on landing
+    private const float PickupSquishTime   = 0.04f;
+    private const float PickupMoveToPlayerDuration = 0.09f;
+    private const float PickupSpinDegrees  = 360f;   // full spin during arc
+
+    // Deploy animation (depositing at build site)
+    private const float DeployScaleDuration = 0.03f;
+    private const float DeployMoveDuration  = 0.1f;
 
     private Transform _bagPos;
     private float _horizontalMove;
@@ -186,13 +194,37 @@ public class PlayerController : MonoBehaviour
         currentMaterialData.currentElements++;
         bagPosIndex++;
 
-        // Capture vfx reference before async — currentMaterialData may be null by the time callbacks fire
         var capturedVfx = currentMaterialData.materialData.vfx;
+        Vector3 arcPeak = element.transform.position + Vector3.up * PickupArcHeight;
+        Transform bagPos = _bagPos; // capture ref in case bag moves
 
-        LeanTween.scale(element, new Vector3(PickupScaleSize, PickupScaleSize, PickupScaleSize), PickupScaleDuration).setOnComplete(() =>
-            LeanTween.move(element, _bagPos, PickupMoveToBagDuration).setEaseLinear().setOnComplete(() =>
-                LeanTween.move(element, transform.position + new Vector3(0, PlayerYOffset, 0), PickupMoveToPlayerDuration).setEaseLinear().setOnComplete(() =>
-                    CompleteFunc(element, capturedVfx, true, type))));
+        // 1. Spring pop — overshoots then settles (setEaseOutBack gives the satisfying bounce)
+        LeanTween.scale(element, Vector3.one * PickupScaleSize, PickupScaleDuration)
+            .setEaseOutBack()
+            .setOnComplete(() =>
+            {
+                // Full spin during the whole arc (start it before the move so timing aligns)
+                LeanTween.rotateAround(element, Vector3.up, PickupSpinDegrees, PickupArcUpTime + PickupArcDownTime);
+
+                // 2. Rise to arc peak
+                LeanTween.move(element, arcPeak, PickupArcUpTime)
+                    .setEaseOutQuad()
+                    .setOnComplete(() =>
+
+                        // 3. Fall into bag
+                        LeanTween.move(element, bagPos.position, PickupArcDownTime)
+                            .setEaseInQuad()
+                            .setOnComplete(() =>
+
+                                // 4. Squish on land, then fly to player body
+                                LeanTween.scale(element, Vector3.one * PickupSquishScale, PickupSquishTime)
+                                    .setEaseOutQuad()
+                                    .setOnComplete(() =>
+
+                                        LeanTween.move(element, transform.position + Vector3.up * PlayerYOffset, PickupMoveToPlayerDuration)
+                                            .setEaseOutBack()
+                                            .setOnComplete(() => CompleteFunc(element, capturedVfx, true, type)))));
+            });
     }
 
     void RemoveFunc(GameObject element, MaterialType type)

@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using System.Collections.Generic;
 
 public class UIManager : MonoBehaviour
 {
@@ -25,7 +26,8 @@ public class UIManager : MonoBehaviour
     private bool _prevHasFish;
     private bool _panelOpen;
 
-    private const float PanelOffscreenX = 1200f;
+    // Computed from actual canvas width in Start() so any screen size works
+    private float _panelOffscreenX;
     private const int UpgradeCost = 20;
 
     // Grey tint applied to the button image when player can't afford the upgrade
@@ -51,7 +53,18 @@ public class UIManager : MonoBehaviour
         _upgradePanelInnerCanvas.blocksRaycasts = false;
         _upgradePanelInnerCanvas.interactable   = false;
 
-        // Black outline on resource counters so they read against any background colour
+        // Compute how far right the panel must travel to be fully off-screen on any device
+        Canvas rootCanvas = GetComponentInParent<Canvas>();
+        float canvasWidth = rootCanvas != null
+            ? rootCanvas.GetComponent<RectTransform>().rect.width
+            : 2000f;
+        _panelOffscreenX = canvasWidth * 0.5f + _upgradePanelRect.rect.width;
+
+        // Dark background + outline on each resource counter so they read against any colour
+        SetupResourceCounter(_woodCanvas);
+        SetupResourceCounter(_fishCanvas);
+
+        // Text outline on the count labels
         ApplyTextOutline(_woodText);
         ApplyTextOutline(_fishText);
 
@@ -135,7 +148,7 @@ public class UIManager : MonoBehaviour
         {
             LeanTween.cancel(_upgradeButton.gameObject);
             _upgradeButton.transform.localScale = Vector3.one;
-            LeanTween.moveX(_upgradePanelRect, PanelOffscreenX, .35f).setEaseOutBack().setOnComplete(FadeOutElements);
+            LeanTween.moveX(_upgradePanelRect, _panelOffscreenX, .35f).setEaseOutBack().setOnComplete(FadeOutElements);
         }
     }
 
@@ -147,7 +160,7 @@ public class UIManager : MonoBehaviour
         LeanTween.cancel(_upgradePanelRect.gameObject);
         LeanTween.cancel(_upgradeButton.gameObject);
         _upgradeButton.transform.localScale = Vector3.one;
-        LeanTween.moveX(_upgradePanelRect, PanelOffscreenX, .35f).setEaseOutBack().setOnComplete(FadeOutElements);
+        LeanTween.moveX(_upgradePanelRect, _panelOffscreenX, .35f).setEaseOutBack().setOnComplete(FadeOutElements);
     }
 
     private void FadeInElements()
@@ -170,14 +183,35 @@ public class UIManager : MonoBehaviour
             tmp.font = _gameFont;
     }
 
-    // Black outline + drop shadow so counter text is readable against any background.
-    // Uses fontMaterial (creates a per-instance material, won't affect other texts).
+    // Dark semi-transparent background + Unity UI Outline on every Image inside the
+    // resource counter panel so the whole widget pops against any background colour.
+    private static void SetupResourceCounter(CanvasGroup canvas)
+    {
+        if (canvas == null) return;
+
+        // Darken the root background image if one exists
+        var bg = canvas.GetComponent<Image>();
+        if (bg != null)
+            bg.color = new Color(0f, 0f, 0f, 0.55f);
+
+        // Add a pixel-perfect Outline to every Image in the hierarchy
+        foreach (var img in canvas.GetComponentsInChildren<Image>(includeInactive: true))
+        {
+            if (img.GetComponent<Outline>() != null) continue;
+            var outline = img.gameObject.AddComponent<Outline>();
+            outline.effectColor    = new Color(0f, 0f, 0f, 0.85f);
+            outline.effectDistance = new Vector2(2f, -2f);
+        }
+    }
+
+    // Black outline + drop shadow on TMP text so count numbers read against any background.
+    // Uses fontMaterial to create a per-instance material — other texts are unaffected.
     private static void ApplyTextOutline(TextMeshProUGUI text)
     {
         if (text == null) return;
         text.color = Color.white;
 
-        var mat = text.fontMaterial; // creates material instance
+        var mat = text.fontMaterial;
         mat.EnableKeyword("OUTLINE_ON");
         mat.SetFloat(ShaderUtilities.ID_OutlineWidth, 0.25f);
         mat.SetColor(ShaderUtilities.ID_OutlineColor, Color.black);
