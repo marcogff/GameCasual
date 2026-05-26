@@ -8,92 +8,114 @@ using UnityEditor.Animations;
 /// Menu: Tools → Setup Wolf Animator
 ///
 /// What it does:
-///   1. Clears any existing states / parameters from WolfAnimator.controller
-///   2. Adds a float parameter called "Speed"
-///   3. Creates an Idle state (idle.fbx clip) and a Run state (run.fbx clip)
-///   4. Wires transitions: Idle→Run when Speed > 0.1, Run→Idle when Speed < 0.1
-///   5. Saves the asset so Unity picks it up immediately
+///   1. Clears stale states/params from WolfAnimator.controller
+///   2. Adds float parameter "Speed"
+///   3. Creates Idle (idle.fbx) and Run (run.fbx) states with transitions
+///   4. Assigns the configured controller to every Animator found inside
+///      the Wolf prefab, regardless of what child object it lives on
+///   5. Saves everything so Unity picks it up immediately
 /// </summary>
 public static class WolfAnimatorSetup
 {
     private const string ControllerPath = "Assets/Art/Animations 1/Wolf/WolfAnimator.controller";
     private const string IdleFbxPath    = "Assets/Art/Animations 1/idle.fbx";
     private const string RunFbxPath     = "Assets/Art/Animations 1/run.fbx";
-    public  const string SpeedParam     = "Speed";  // must match Enemy._runParam default
+    private const string WolfPrefabPath = "Assets/Prefabs/Wolf.prefab";
+    public  const string SpeedParam     = "Speed";
 
     [MenuItem("Tools/Setup Wolf Animator")]
     public static void Setup()
     {
-        // ── Load assets ─────────────────────────────────────────────────────
+        // ── Load controller ──────────────────────────────────────────────────
         var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
         if (controller == null)
         {
-            Debug.LogError($"[WolfAnimatorSetup] Controller not found at '{ControllerPath}'. " +
-                           "Check the path matches your project layout.");
+            Debug.LogError($"[WolfAnimatorSetup] Controller not found at '{ControllerPath}'.");
             return;
         }
 
+        // ── Load animation clips ─────────────────────────────────────────────
         var idleClip = GetFirstClip(IdleFbxPath);
         var runClip  = GetFirstClip(RunFbxPath);
 
-        if (idleClip == null) Debug.LogWarning($"[WolfAnimatorSetup] No clip found in '{IdleFbxPath}'");
-        if (runClip  == null) Debug.LogWarning($"[WolfAnimatorSetup] No clip found in '{RunFbxPath}'");
+        if (idleClip == null) Debug.LogWarning($"[WolfAnimatorSetup] No clip in '{IdleFbxPath}'");
+        if (runClip  == null) Debug.LogWarning($"[WolfAnimatorSetup] No clip in '{RunFbxPath}'");
 
         // ── Parameters ──────────────────────────────────────────────────────
-        // Wipe all existing parameters and start fresh with just Speed (Float).
         while (controller.parameters.Length > 0)
             controller.RemoveParameter(0);
-
         controller.AddParameter(SpeedParam, AnimatorControllerParameterType.Float);
 
         // ── States ──────────────────────────────────────────────────────────
-        // Ensure there is at least one layer (controllers always have Base Layer).
         if (controller.layers.Length == 0)
         {
-            Debug.LogError("[WolfAnimatorSetup] Controller has no layers — cannot continue.");
+            Debug.LogError("[WolfAnimatorSetup] Controller has no layers.");
             return;
         }
 
         AnimatorStateMachine sm = controller.layers[0].stateMachine;
-
-        // Remove every existing state so we don't accumulate duplicates on repeated runs.
         foreach (var s in sm.states.ToArray())
             sm.RemoveState(s.state);
 
-        // Idle
         AnimatorState idleState = sm.AddState("Idle");
-        idleState.motion  = idleClip;
-        sm.defaultState   = idleState;
+        idleState.motion = idleClip;
+        sm.defaultState  = idleState;
 
-        // Run
         AnimatorState runState = sm.AddState("Run");
         runState.motion = runClip;
 
-        // ── Transitions ─────────────────────────────────────────────────────
-        AnimatorStateTransition toRun = idleState.AddTransition(runState);
+        // ── Transitions ──────────────────────────────────────────────────────
+        var toRun = idleState.AddTransition(runState);
         toRun.AddCondition(AnimatorConditionMode.Greater, 0.1f, SpeedParam);
         toRun.hasExitTime = false;
-        toRun.duration    = 0.15f;  // blend time in seconds
+        toRun.duration    = 0.15f;
 
-        AnimatorStateTransition toIdle = runState.AddTransition(idleState);
+        var toIdle = runState.AddTransition(idleState);
         toIdle.AddCondition(AnimatorConditionMode.Less, 0.1f, SpeedParam);
         toIdle.hasExitTime = false;
         toIdle.duration    = 0.15f;
 
-        // ── Save ────────────────────────────────────────────────────────────
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();
+
+        // ── Assign controller to Wolf prefab ─────────────────────────────────
+        // The Animator may live on any child (even one named 'Cube' by the FBX
+        // importer). GetComponentsInChildren finds it no matter what it's called.
+        var wolfPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(WolfPrefabPath);
+        if (wolfPrefab == null)
+        {
+            Debug.LogWarning($"[WolfAnimatorSetup] Wolf prefab not found at '{WolfPrefabPath}'. " +
+                             "Drag WolfAnimator.controller onto the Animator component manually.");
+        }
+        else
+        {
+            var animators = wolfPrefab.GetComponentsInChildren<Animator>(includeInactive: true);
+            if (animators.Length == 0)
+            {
+                Debug.LogWarning("[WolfAnimatorSetup] No Animator found in Wolf prefab. " +
+                                 "Add an Animator component to the wolf mesh and re-run this tool.");
+            }
+            else
+            {
+                foreach (var anim in animators)
+                {
+                    anim.runtimeAnimatorController = controller;
+                    EditorUtility.SetDirty(anim);
+                    Debug.Log($"[WolfAnimatorSetup] Assigned controller to '{anim.gameObject.name}'.");
+                }
+                PrefabUtility.SavePrefabAsset(wolfPrefab);
+            }
+        }
+
         AssetDatabase.Refresh();
 
-        Debug.Log($"[WolfAnimatorSetup] Done!\n" +
-                  $"  Idle  → clip: '{idleClip?.name ?? "MISSING"}'\n" +
-                  $"  Run   → clip: '{runClip?.name  ?? "MISSING"}'\n" +
+        Debug.Log($"[WolfAnimatorSetup] Complete!\n" +
+                  $"  Idle  → '{idleClip?.name ?? "MISSING"}'\n" +
+                  $"  Run   → '{runClip?.name  ?? "MISSING"}'\n" +
                   $"  Param → '{SpeedParam}' (Float)\n" +
-                  $"  Enemy._runParam must be set to '{SpeedParam}' in the Inspector.");
+                  $"  Hit Play — wolf should now idle and run.");
     }
 
-    // Returns the first real AnimationClip inside an FBX.
-    // Unity embeds clips as sub-assets; "__preview__" clips are editor-only previews.
     static AnimationClip GetFirstClip(string fbxPath)
     {
         return AssetDatabase.LoadAllAssetsAtPath(fbxPath)
