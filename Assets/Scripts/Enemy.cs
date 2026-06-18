@@ -47,9 +47,11 @@ public class Enemy : MonoBehaviour
     private float _lastStealTime     = -99f;
     private float _lastDestUpdate    = 0f;
     private float _lastTargetRefresh = 0f;
+    private float _chaseStartTime    = 0f;
 
     private const float DestUpdateInterval    = 0.1f;  // cap destination writes to 10/s
     private const float TargetRefreshInterval = 5f;    // re-evaluate nearest player every 5s
+    private const float MaxChaseDuration      = 12f;   // give up the chase after this long
     private const float StealPopScale      = 1.4f;
     private const float StealPopTime       = 0.12f;
 
@@ -173,6 +175,7 @@ public class Enemy : MonoBehaviour
         _state           = State.Chase;
         _agent.speed     = _chaseSpeed;
         _agent.isStopped = false;     // guard against a stuck-stopped state from a prior steal
+        _chaseStartTime  = Time.time;
         _alert?.Show();               // telegraph the attack to the player
 
         // Set the destination immediately — don't wait a frame or for the throttle,
@@ -211,7 +214,8 @@ public class Enemy : MonoBehaviour
     {
         float dist = Vector3.Distance(transform.position, _player.position);
 
-        if (dist > _loseRange)
+        // Give up if the player escapes range, or after chasing too long without a steal
+        if (dist > _loseRange || Time.time - _chaseStartTime > MaxChaseDuration)
         {
             _state       = State.Wander;
             _agent.speed = _wanderSpeed;

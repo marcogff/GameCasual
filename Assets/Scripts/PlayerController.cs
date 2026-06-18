@@ -188,7 +188,15 @@ public class PlayerController : NetworkBehaviour
     {
         if (!IsLocalPlayer) return;
 
-        currentMaterialData = other.gameObject.transform.parent.GetComponent<MaterialsData>();
+        // Only update the tracked material when this collider actually belongs to a
+        // MaterialsData object. Guards against null parents (e.g. the wolf's steal
+        // trigger, which is a root object) — that was the NullReferenceException.
+        Transform parent = other.transform.parent;
+        if (parent != null)
+        {
+            var md = parent.GetComponent<MaterialsData>();
+            if (md != null) currentMaterialData = md;
+        }
 
         if (other.gameObject.CompareTag(Tags.Cave))
         {
@@ -201,7 +209,14 @@ public class PlayerController : NetworkBehaviour
     {
         if (!IsLocalPlayer) return;
 
-        currentMaterialData = null;
+        // Clear the tracked material only when leaving THAT material — so an unrelated
+        // trigger (wolf, cave, shop) walking past doesn't wipe a valid resource ref.
+        Transform parent = other.transform.parent;
+        if (parent != null)
+        {
+            var md = parent.GetComponent<MaterialsData>();
+            if (md != null && md == currentMaterialData) currentMaterialData = null;
+        }
 
         if (other.gameObject.CompareTag(Tags.UpgradeShop))
         {
