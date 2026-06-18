@@ -163,9 +163,17 @@ public class MaterialsData : NetworkBehaviour
 
     void DeployLand()
     {
-        limit.enabled = false;
-        LeanTween.scale(prefabLand, Vector3.one, .3f).setEaseInCirc();
+        limit.enabled    = false;
         _currentDeployed = true;
+
+        // Big bounce-in on the unlocked land patch
+        prefabLand.transform.localScale = Vector3.zero;
+        LeanTween.scale(prefabLand, Vector3.one * 1.15f, 0.3f).setEaseOutBack()
+            .setOnComplete(() =>
+                LeanTween.scale(prefabLand, Vector3.one, 0.18f).setEaseOutQuad());
+
+        // Green screen flash so the player knows something big just happened
+        StealEffect.Instance.Celebrate();
     }
 
     private IEnumerator Fill(int time)

@@ -44,10 +44,12 @@ public class Enemy : MonoBehaviour
     private const string AnimRun  = "Run";
 
     // ── Misc ─────────────────────────────────────────────────────────────────
-    private float _lastStealTime  = -99f;
-    private float _lastDestUpdate = 0f;
+    private float _lastStealTime     = -99f;
+    private float _lastDestUpdate    = 0f;
+    private float _lastTargetRefresh = 0f;
 
-    private const float DestUpdateInterval = 0.1f; // cap destination writes to 10/s
+    private const float DestUpdateInterval    = 0.1f;  // cap destination writes to 10/s
+    private const float TargetRefreshInterval = 5f;    // re-evaluate nearest player every 5s
     private const float StealPopScale      = 1.4f;
     private const float StealPopTime       = 0.12f;
 
@@ -70,16 +72,9 @@ public class Enemy : MonoBehaviour
         hit.isTrigger = true;
         hit.radius    = _stealRadius;
 
-        var playerGO = GameObject.FindWithTag(Tags.Player);
-        if (playerGO != null)
-        {
-            _player     = playerGO.transform;
-            _playerCtrl = playerGO.GetComponent<PlayerController>();
-        }
-        else
-        {
-            Debug.LogWarning("[Enemy] Tag 'Player' not set on the player GameObject.");
-        }
+        // Find the nearest player — handles both solo and 2-player sessions
+        if (!RefreshTarget())
+            Debug.LogWarning("[Enemy] No player with tag 'Player' found in scene.");
 
         if (!_agent.isOnNavMesh)
         {
@@ -97,8 +92,17 @@ public class Enemy : MonoBehaviour
 
     void Update()
     {
-        if (_player == null || _playerCtrl == null) return;
         if (!_agent.isOnNavMesh) return;
+
+        // Periodically re-target the nearest player so the wolf switches
+        // to player 2 if they're closer (also handles late-join in multiplayer).
+        if (Time.time - _lastTargetRefresh > TargetRefreshInterval)
+        {
+            _lastTargetRefresh = Time.time;
+            RefreshTarget();
+        }
+
+        if (_player == null || _playerCtrl == null) return;
 
         switch (_state)
         {
@@ -109,6 +113,34 @@ public class Enemy : MonoBehaviour
         }
 
         SyncAnimation();
+    }
+
+    // ── Player targeting ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Finds the nearest PlayerController in the scene and updates _player / _playerCtrl.
+    /// Returns true if a target was found.
+    /// In solo play this always returns the one player.
+    /// In multiplayer (Phase 4+) the wolf will chase whoever is closest.
+    /// </summary>
+    bool RefreshTarget()
+    {
+        var all = FindObjectsByType<PlayerController>(FindObjectsSortMode.None);
+        if (all.Length == 0) return false;
+
+        float   nearest = float.MaxValue;
+        PlayerController best = null;
+
+        foreach (var pc in all)
+        {
+            float d = Vector3.Distance(transform.position, pc.transform.position);
+            if (d < nearest) { nearest = d; best = pc; }
+        }
+
+        if (best == null) return false;
+        _player     = best.transform;
+        _playerCtrl = best;
+        return true;
     }
 
     // ── Wander ───────────────────────────────────────────────────────────────

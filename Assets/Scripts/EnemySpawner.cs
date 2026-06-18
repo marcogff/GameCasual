@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -7,17 +8,30 @@ public class EnemySpawner : MonoBehaviour
     [SerializeField] private int        _count       = 2;
     [SerializeField] private float      _spawnRadius = 4f;
 
+    private readonly List<GameObject> _alive = new List<GameObject>();
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
     void Start()
     {
         for (int i = 0; i < _count; i++)
             SpawnEnemy();
     }
 
+    void Update()
+    {
+        // Remove destroyed entries (wolf fell off world, etc.)
+        _alive.RemoveAll(e => e == null);
+
+        // Re-spawn to maintain the desired population
+        while (_alive.Count < _count)
+            SpawnEnemy();
+    }
+
+    // ── Spawn ─────────────────────────────────────────────────────────────────
+
     void SpawnEnemy()
     {
-        // Find a valid NavMesh position near the spawner.
-        // This replaces the old Physics.Raycast approach — NavMesh.SamplePosition
-        // guarantees the wolf spawns on a walkable surface and won't float or clip.
         Vector3 spawnPos = transform.position;
 
         for (int attempt = 0; attempt < 10; attempt++)
@@ -37,6 +51,8 @@ public class EnemySpawner : MonoBehaviour
         var ctrl = enemy.GetComponent<Enemy>();
         if (ctrl != null)
             ctrl.spawnPoint = transform;
+
+        _alive.Add(enemy);
     }
 
 #if UNITY_EDITOR

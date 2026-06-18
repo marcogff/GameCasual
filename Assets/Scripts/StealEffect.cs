@@ -3,9 +3,13 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Singleton that plays a full-screen red flash whenever the wolf steals resources.
+/// Singleton that plays a full-screen colour flash.
 /// Self-initialising — calling StealEffect.Flash() from anywhere will auto-create
 /// the Canvas overlay the first time. No scene setup required.
+///
+/// Usage:
+///   StealEffect.Instance.Flash();                    // red flash (wolf steal)
+///   StealEffect.Instance.Flash(Color.green, 0.45f);  // green flash (build complete)
 /// </summary>
 public class StealEffect : MonoBehaviour
 {
@@ -27,10 +31,14 @@ public class StealEffect : MonoBehaviour
     private Image _overlay;
     private Coroutine _active;
 
-    // ── Constants ─────────────────────────────────────────────────────────────
-    private const float DefaultIntensity = 0.32f;
-    private const float FadeInTime       = 0.06f;
-    private const float FadeOutTime      = 0.44f;
+    // ── Default values ────────────────────────────────────────────────────────
+    private static readonly Color StealColor     = new Color(1f, 0f, 0f);
+    private static readonly Color CelebColor     = new Color(0.35f, 1f, 0.4f);
+    private const float DefaultStealIntensity    = 0.32f;
+    private const float DefaultCelebIntensity    = 0.25f;
+    private const float FadeInTime               = 0.06f;
+    private const float StealFadeOutTime         = 0.44f;
+    private const float CelebFadeOutTime         = 0.70f;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -48,14 +56,14 @@ public class StealEffect : MonoBehaviour
 
         var canvas        = canvasGO.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 200; // above everything, including lobby UI (100)
+        canvas.sortingOrder = 200;
         canvasGO.AddComponent<CanvasScaler>();
 
-        var imgGO = new GameObject("RedOverlay");
+        var imgGO = new GameObject("Overlay");
         imgGO.transform.SetParent(canvasGO.transform, false);
         _overlay              = imgGO.AddComponent<Image>();
         _overlay.color        = new Color(1f, 0f, 0f, 0f);
-        _overlay.raycastTarget = false; // purely visual — never blocks input
+        _overlay.raycastTarget = false;
 
         var rt = imgGO.GetComponent<RectTransform>();
         rt.anchorMin = Vector2.zero;
@@ -65,40 +73,48 @@ public class StealEffect : MonoBehaviour
 
     // ── Public API ─────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Flashes a red vignette on screen. Safe to call from any context.
-    /// Interrupts any in-progress flash and starts fresh.
-    /// </summary>
-    public void Flash(float intensity = DefaultIntensity)
-    {
-        if (_overlay == null) return;
-        if (_active != null) StopCoroutine(_active);
-        _active = StartCoroutine(FlashRoutine(intensity));
-    }
+    /// <summary>Red flash — wolf stole resources.</summary>
+    public void Flash(float intensity = DefaultStealIntensity)
+        => Trigger(StealColor, intensity, StealFadeOutTime);
+
+    /// <summary>Green flash — build site completed.</summary>
+    public void Celebrate(float intensity = DefaultCelebIntensity)
+        => Trigger(CelebColor, intensity, CelebFadeOutTime);
+
+    /// <summary>Flash any colour.</summary>
+    public void Flash(Color color, float intensity, float fadeOut = StealFadeOutTime)
+        => Trigger(color, intensity, fadeOut);
 
     // ── Private ───────────────────────────────────────────────────────────────
 
-    IEnumerator FlashRoutine(float intensity)
+    void Trigger(Color color, float intensity, float fadeOut)
     {
-        // Fast in
+        if (_overlay == null) return;
+        if (_active != null) StopCoroutine(_active);
+        _active = StartCoroutine(FlashRoutine(color, intensity, fadeOut));
+    }
+
+    IEnumerator FlashRoutine(Color color, float intensity, float fadeOut)
+    {
         float t = 0;
         while (t < FadeInTime)
         {
             t += Time.deltaTime;
-            _overlay.color = new Color(1f, 0f, 0f, Mathf.Lerp(0f, intensity, t / FadeInTime));
+            _overlay.color = new Color(color.r, color.g, color.b,
+                                       Mathf.Lerp(0f, intensity, t / FadeInTime));
             yield return null;
         }
 
-        // Slow out
         t = 0;
-        while (t < FadeOutTime)
+        while (t < fadeOut)
         {
             t += Time.deltaTime;
-            _overlay.color = new Color(1f, 0f, 0f, Mathf.Lerp(intensity, 0f, t / FadeOutTime));
+            _overlay.color = new Color(color.r, color.g, color.b,
+                                       Mathf.Lerp(intensity, 0f, t / fadeOut));
             yield return null;
         }
 
-        _overlay.color = new Color(1f, 0f, 0f, 0f);
+        _overlay.color = new Color(color.r, color.g, color.b, 0f);
         _active = null;
     }
 }

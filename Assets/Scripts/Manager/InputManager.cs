@@ -36,7 +36,10 @@ public class InputManager : MonoBehaviour, IDragHandler, IPointerDownHandler, IP
 
     void Update()
     {
-        GameManager.Instance.playerController.animator.SetBool(IsRunHash, _posInput != Vector2.zero);
+        // Guard against null during scene load or when the local player hasn't spawned yet
+        var anim = GameManager.Instance?.playerController?.animator;
+        if (anim != null)
+            anim.SetBool(IsRunHash, _posInput != Vector2.zero);
     }
 
     public void OnPointerDown(PointerEventData eventData)
