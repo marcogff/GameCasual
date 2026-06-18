@@ -388,20 +388,63 @@ public class PlayerController : NetworkBehaviour
         SyncInventoryNetwork();
     }
 
+    // ── Wolf steal (server-authoritative in multiplayer) ──────────────────────
+
     /// <summary>
-    /// Called by Enemy when it successfully steals resources from this player.
-    /// Adjusts the visual bag-position index to match the reduced inventory.
+    /// How many resources this player is carrying. Uses the networked counts when
+    /// spawned so the SERVER can read a remote player's haul; local lists in solo.
     /// </summary>
-    public void OnResourcesStolen(int count)
+    public int CarriedCount =>
+        IsSpawned ? NetWoodCount.Value + NetFishCount.Value
+                  : currentElementsWood.Count + currentElementsFish.Count;
+
+    /// <summary>
+    /// Called by the wolf to steal up to <paramref name="amount"/> items. In a
+    /// session the wolf runs on the server, so this routes to the OWNING client
+    /// (only it has the real carried-item list); in solo it just runs locally.
+    /// </summary>
+    public void StealFromWolf(int amount)
     {
-        bagPosIndex = Mathf.Max(0, bagPosIndex - count);
+        if (amount <= 0) return;
+        if (IsSpawned) StealResourcesRpc(amount); // server → owner
+        else           RemoveCarried(amount);     // solo
+    }
+
+    [Rpc(SendTo.Owner)]
+    void StealResourcesRpc(int amount) => RemoveCarried(amount);
+
+    /// <summary>Removes carried items (fish first, then wood) + plays victim feedback.</summary>
+    void RemoveCarried(int amount)
+    {
+        int remaining = amount;
+        remaining -= TakeFrom(currentElementsFish, remaining);
+        remaining -= TakeFrom(currentElementsWood, remaining);
+
+        int taken = amount - remaining;
+        if (taken <= 0) return;
+
+        bagPosIndex = Mathf.Max(0, bagPosIndex - taken);
         SyncInventoryNetwork();
+
+        // Feedback fires on the victim (this runs on the owner via RPC, or locally in solo)
+        StealEffect.Instance.Flash();
+        AudioManager.Instance.Play(AudioManager.Steal);
+    }
+
+    static int TakeFrom(List<GameObject> list, int n)
+    {
+        int take = Mathf.Min(n, list.Count);
+        for (int i = 0; i < take; i++)
+        {
+            if (list[0] != null) Destroy(list[0]);
+            list.RemoveAt(0);
+        }
+        return take;
     }
 
     /// <summary>
     /// Writes local wood/fish counts into the network variables so all
-    /// clients can observe this player's inventory (e.g. for name-tag overlays).
-    /// Only runs when actually connected — no-ops in solo play.
+    /// clients can observe this player's inventory. No-op in solo play.
     /// </summary>
     void SyncInventoryNetwork()
     {

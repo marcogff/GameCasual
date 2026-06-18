@@ -303,39 +303,17 @@ public class Enemy : MonoBehaviour
         if (Time.time - _lastStealTime < _stealCooldown) return;
         if (_playerCtrl == null) return;
 
-        int wood = _playerCtrl.currentElementsWood.Count;
-        int fish = _playerCtrl.currentElementsFish.Count;
-        if (wood + fish == 0) return;
+        int carried = _playerCtrl.CarriedCount;
+        if (carried == 0) return;
 
         _lastStealTime   = Time.time;
         _agent.isStopped = true;
 
-        int amount = Mathf.Min(_stealAmount, wood + fish);
-        if (fish >= wood)
-        {
-            int take = Mathf.Min(amount, fish);
-            for (int i = 0; i < take; i++)
-            {
-                Destroy(_playerCtrl.currentElementsFish[0]);
-                _playerCtrl.currentElementsFish.RemoveAt(0);
-            }
-        }
-        else
-        {
-            int take = Mathf.Min(amount, wood);
-            for (int i = 0; i < take; i++)
-            {
-                Destroy(_playerCtrl.currentElementsWood[0]);
-                _playerCtrl.currentElementsWood.RemoveAt(0);
-            }
-        }
-
-        // Let the player react to the theft (bagPosIndex correction, etc.)
-        _playerCtrl.OnResourcesStolen(amount);
-
-        // Screen + audio feedback for the local player
-        StealEffect.Instance.Flash();
-        AudioManager.Instance.Play(AudioManager.Steal);
+        // Delegate the actual removal to the player. In multiplayer this runs on the
+        // server and routes to the targeted client (server-authoritative); the
+        // victim's screen flash + steal sound fire there. In solo it's immediate.
+        int amount = Mathf.Min(_stealAmount, carried);
+        _playerCtrl.StealFromWolf(amount);
 
         // Squash-and-stretch pop RELATIVE to the wolf's real scale, then run home.
         // (Bug was scaling back to Vector3.one — the prefab is 3x, so it shrank.)
