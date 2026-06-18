@@ -140,8 +140,12 @@ the packages are still in `manifest.json` (Unity silently strips entries with in
 ## NavMesh note (wolf following)
 
 If the wolf shows "!" but won't follow, the editor logs `pathStatus=PathPartial` —
-the player is on NavMesh that isn't connected to the wolf's. **Re-bake** the NavMesh
-(Window → AI → Navigation → Bake) covering the whole walkable map. Land the player
-unlocks at runtime (`MaterialsData.DeployLand`) is NOT in the baked mesh, so the wolf
-can't follow there — keep wolves/resources within the baked starting area, or add a
-runtime `NavMeshSurface` rebake in a later pass.
+the player is on NavMesh that isn't connected to the wolf's.
+
+⚠️ **Unity 6 has no Bake button in the old Navigation window** (it only shows
+Agents/Areas). The `com.unity.ai.navigation` package bakes via a **NavMeshSurface**
+component. Use **Tools → Bake NavMesh** (`Scripts/Editor/NavMeshBaker.cs`) for a
+one-click scene-wide bake, then save the scene. Land the player unlocks at runtime
+(`MaterialsData.DeployLand`) is NOT in the baked mesh, so the wolf can't follow there
+— keep wolves/resources within the baked starting area, or add runtime
+`NavMeshSurface` rebaking in a later pass.

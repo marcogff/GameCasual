@@ -41,6 +41,7 @@ public class Enemy : MonoBehaviour
     // ── Animation ────────────────────────────────────────────────────────────
     private bool         _wasMoving;
     private bool         _warnedPartialPath;
+    private Vector3      _baseScale = Vector3.one;  // the wolf's real scale (prefab is 3x)
     private const string AnimIdle = "Idle";
     private const string AnimRun  = "Run";
 
@@ -63,6 +64,7 @@ public class Enemy : MonoBehaviour
         _agent    = GetComponent<NavMeshAgent>();
         _animator = GetComponentInChildren<Animator>();
         _alert    = gameObject.AddComponent<WolfAlert>();
+        _baseScale = transform.localScale; // capture real scale so the steal pop restores it
 
         _agent.speed            = _wanderSpeed;
         _agent.acceleration     = 12f;
@@ -316,14 +318,16 @@ public class Enemy : MonoBehaviour
         // Screen feedback for the local player
         StealEffect.Instance.Flash();
 
-        // Squash-and-stretch pop, then run home
+        // Squash-and-stretch pop RELATIVE to the wolf's real scale, then run home.
+        // (Bug was scaling back to Vector3.one — the prefab is 3x, so it shrank.)
         LeanTween.cancel(gameObject);
-        LeanTween.scale(gameObject,
-            new Vector3(StealPopScale, 1f / StealPopScale, StealPopScale), StealPopTime)
+        Vector3 squashed = Vector3.Scale(_baseScale,
+            new Vector3(StealPopScale, 1f / StealPopScale, StealPopScale));
+        LeanTween.scale(gameObject, squashed, StealPopTime)
             .setEaseOutQuad()
             .setOnComplete(() =>
             {
-                LeanTween.scale(gameObject, Vector3.one, StealPopTime * 2f).setEaseOutBack();
+                LeanTween.scale(gameObject, _baseScale, StealPopTime * 2f).setEaseOutBack();
                 StartReturning();
             });
     }
