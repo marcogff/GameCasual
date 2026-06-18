@@ -40,6 +40,7 @@ public class Enemy : MonoBehaviour
 
     // ── Animation ────────────────────────────────────────────────────────────
     private bool         _wasMoving;
+    private bool         _warnedPartialPath;
     private const string AnimIdle = "Idle";
     private const string AnimRun  = "Run";
 
@@ -181,12 +182,7 @@ public class Enemy : MonoBehaviour
         // Set the destination immediately — don't wait a frame or for the throttle,
         // otherwise the wolf appears to "see" the player ("!") but stand still.
         ChaseStep();
-
-#if UNITY_EDITOR
-        Debug.Log($"[Enemy] Chase START. pos={transform.position} dest={_agent.destination} " +
-                  $"isStopped={_agent.isStopped} speed={_agent.speed} " +
-                  $"pathStatus={_agent.pathStatus} onMesh={_agent.isOnNavMesh}");
-#endif
+        _warnedPartialPath = false;
     }
 
     void PickWanderTarget()
@@ -248,6 +244,22 @@ public class Enemy : MonoBehaviour
             _agent.SetDestination(navHit.position);
         else
             _agent.SetDestination(_player.position);
+
+#if UNITY_EDITOR
+        // If the agent can't fully reach the player, the NavMesh isn't connected
+        // between them (gap, unbaked area, or freshly-unlocked land). Warn once.
+        if (!_warnedPartialPath && !_agent.pathPending &&
+            _agent.pathStatus != NavMeshPathStatus.PathComplete)
+        {
+            _warnedPartialPath = true;
+            Debug.LogWarning(
+                "[Enemy] Wolf can't reach the player — NavMesh path is " +
+                $"{_agent.pathStatus}. The walkable area is not fully baked/connected.\n" +
+                "Fix: Window → AI → Navigation → Bake, covering the WHOLE walkable map " +
+                "(including any land the player unlocks). Until then the wolf can only " +
+                "chase within the baked area.");
+        }
+#endif
     }
 
     // ── Hit detection (steal on contact) ─────────────────────────────────────
