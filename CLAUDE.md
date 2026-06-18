@@ -113,15 +113,21 @@ The networking code is in Phases 1–3. Here's what still needs to happen in the
 ## Packages (manifest.json)
 
 ```
-com.unity.netcode.gameobjects   2.1.1
+com.unity.netcode.gameobjects   2.12.0
 com.unity.services.core         1.12.5
-com.unity.services.authentication 3.3.3
-com.unity.services.relay        1.1.1
-com.unity.services.lobby        1.2.2
-com.unity.ai.navigation         2.0.12   ← NavMesh
-com.unity.cinemachine           3.1.6
+com.unity.services.authentication 3.7.1
+com.unity.services.relay        1.2.0
+com.unity.services.lobby        1.2.2    ← package id is "lobby" (singular)
+com.unity.ai.navigation         2.0.13   ← NavMesh
+com.unity.cinemachine           3.1.7
 com.unity.probuilder            6.0.9
 ```
+
+⚠️ **Lobby namespace gotcha:** the package id is `com.unity.services.lobby` (singular)
+but the C# namespace is `Unity.Services.Lobbies` (**plural**). `RelayServerData` lives in
+`Unity.Networking.Transport.Relay`, not in the Relay service package. If you see CS0246 errors
+for `LobbyService` / `Allocation` / `RelayServerData`, check those two things first — and confirm
+the packages are still in `manifest.json` (Unity silently strips entries with invalid versions).
 
 ---
 

@@ -2,10 +2,11 @@ using System;
 using System.Threading.Tasks;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
+using Unity.Networking.Transport.Relay;   // RelayServerData
 using Unity.Services.Authentication;
 using Unity.Services.Core;
-using Unity.Services.Lobby;
-using Unity.Services.Lobby.Models;
+using Unity.Services.Lobbies;              // NOTE: package id is "com.unity.services.lobby" (singular),
+using Unity.Services.Lobbies.Models;       //       but the C# namespace is "Lobbies" (plural)
 using Unity.Services.Relay;
 using Unity.Services.Relay.Models;
 using UnityEngine;
