@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -10,16 +11,27 @@ public class EnemySpawner : MonoBehaviour
 
     private readonly List<GameObject> _alive = new List<GameObject>();
 
+    // ── Networking ──────────────────────────────────────────────────────────
+    // Solo: NetworkManager isn't listening → we spawn locally as before.
+    // Multiplayer: only the SERVER spawns wolves; clients receive them as replicas
+    // via NetworkObject. (Phase 4 — needs NetworkObject + NetworkTransform on the
+    // Wolf prefab and the prefab registered with NetworkManager.)
+    private bool Networked => NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
+    private bool ShouldSpawn => !Networked || NetworkManager.Singleton.IsServer;
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     void Start()
     {
+        if (!ShouldSpawn) return;
         for (int i = 0; i < _count; i++)
             SpawnEnemy();
     }
 
     void Update()
     {
+        if (!ShouldSpawn) return;
+
         // Remove destroyed entries (wolf fell off world, etc.)
         _alive.RemoveAll(e => e == null);
 
@@ -51,6 +63,16 @@ public class EnemySpawner : MonoBehaviour
         var ctrl = enemy.GetComponent<Enemy>();
         if (ctrl != null)
             ctrl.spawnPoint = transform;
+
+        // In a networked session, replicate the wolf to all clients.
+        if (Networked)
+        {
+            var netObj = enemy.GetComponent<NetworkObject>();
+            if (netObj != null) netObj.Spawn(true);
+            else Debug.LogWarning("[EnemySpawner] Wolf prefab has no NetworkObject — " +
+                                  "it won't be visible to other players. Add NetworkObject + " +
+                                  "NetworkTransform to the Wolf prefab for multiplayer.");
+        }
 
         _alive.Add(enemy);
     }

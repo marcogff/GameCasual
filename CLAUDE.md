@@ -144,7 +144,10 @@ the packages are still in `manifest.json` (Unity silently strips entries with in
 
 ## What's next (Phase 4 / 5)
 
-- **Phase 4** (TODO): Sync Enemy over the network. Spawn wolf via `NetworkManager.SpawnWithOwnership`, run AI only on server, broadcast state via `NetworkVariable<byte>`. Remote clients receive position via `NetworkTransform`.
+- **Phase 4** (code foundation done — needs prefab wiring + 2-player test):
+  - `EnemySpawner` only spawns on the server when networked, and calls `NetworkObject.Spawn` so clients get replicas. Solo path unchanged.
+  - `Enemy` skips its AI on remote replicas (`IsRemoteReplica()`), disables the agent there, and animates from observed movement. The steal is gated to the server. **All networking branches are inert in solo.**
+  - **Still to do in the Editor:** add `NetworkObject` + `NetworkTransform` to the Wolf prefab, register the Wolf prefab with `NetworkManager` (Default Network Prefabs list). **Still in code:** a server→owner RPC so a steal removes the *targeted* client's carried items (today the server only mutates its own local inventory). Validate with 2 players over Relay.
 - **Phase 5** (code done — `MultiplayerHUD.cs`): teammate resource counts on HUD, join code as in-game overlay, "waiting for players" banner. Self-spawns at runtime; hidden in solo play. Remaining optional: gate gameplay until both players are present (currently the game is always live).
 
 ## Audio setup (optional — game runs silent without it)

@@ -1,4 +1,5 @@
 using System.Collections;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -38,6 +39,14 @@ public class Enemy : MonoBehaviour
     private PlayerController _playerCtrl;
     private WolfAlert        _alert;
 
+    // ── Networking (Phase 4) ──────────────────────────────────────────────────
+    // Solo: _netObj is null → all of this stays inert and the wolf behaves normally.
+    // Multiplayer: AI runs only on the server; remote clients are driven by
+    // NetworkTransform and just animate from observed movement.
+    private NetworkObject _netObj;
+    private bool          _replicaInit;
+    private Vector3       _lastPos;
+
     // ── Animation ────────────────────────────────────────────────────────────
     private bool         _wasMoving;
     private bool         _warnedPartialPath;
@@ -65,6 +74,8 @@ public class Enemy : MonoBehaviour
         _animator = GetComponentInChildren<Animator>();
         _alert    = gameObject.AddComponent<WolfAlert>();
         _baseScale = transform.localScale; // capture real scale so the steal pop restores it
+        _netObj   = GetComponent<NetworkObject>(); // null in solo — networking stays inert
+        _lastPos  = transform.position;
 
         _agent.speed            = _wanderSpeed;
         _agent.acceleration     = 12f;
@@ -106,6 +117,10 @@ public class Enemy : MonoBehaviour
 
     void Update()
     {
+        // On a remote client this wolf is a replica — NetworkTransform moves it;
+        // don't run AI here (it would fight the server). Just animate.
+        if (IsRemoteReplica()) { DriveReplica(); return; }
+
         if (!_agent.isOnNavMesh) return;
 
         // Periodically re-target the nearest player so the wolf switches
@@ -269,6 +284,7 @@ public class Enemy : MonoBehaviour
 
     void OnTriggerEnter(Collider other)
     {
+        if (IsRemoteReplica()) return;   // steal is server-authoritative
         if (_state == State.Scared) return;
         if (!other.CompareTag(Tags.Player)) return;
         AttemptSteal();
@@ -276,6 +292,7 @@ public class Enemy : MonoBehaviour
 
     void OnTriggerStay(Collider other)
     {
+        if (IsRemoteReplica()) return;
         if (_state == State.Scared) return;
         if (!other.CompareTag(Tags.Player)) return;
         AttemptSteal();
@@ -392,13 +409,40 @@ public class Enemy : MonoBehaviour
 
     // ── Animation ────────────────────────────────────────────────────────────
 
-    void SyncAnimation()
+    void SyncAnimation() => SetMoving(_agent.velocity.magnitude > 0.15f);
+
+    void SetMoving(bool isMoving)
     {
         if (_animator == null) return;
-        bool isMoving = _agent.velocity.magnitude > 0.15f;
         if (isMoving == _wasMoving) return;
         _animator.CrossFade(isMoving ? AnimRun : AnimIdle, 0.15f);
         _wasMoving = isMoving;
+    }
+
+    // ── Networking (Phase 4) ──────────────────────────────────────────────────
+
+    /// <summary>True only for a wolf replica on a non-server client.</summary>
+    bool IsRemoteReplica()
+    {
+        if (_netObj == null) return false;
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening) return false;
+        return _netObj.IsSpawned && !NetworkManager.Singleton.IsServer;
+    }
+
+    /// <summary>On a client, the NavMeshAgent must not drive movement (NetworkTransform does).
+    /// Animate from observed position change instead.</summary>
+    void DriveReplica()
+    {
+        if (!_replicaInit)
+        {
+            _replicaInit = true;
+            if (_agent != null) { _agent.updatePosition = false; _agent.updateRotation = false; }
+            _lastPos = transform.position;
+        }
+
+        float speed = (transform.position - _lastPos).magnitude / Mathf.Max(Time.deltaTime, 1e-4f);
+        _lastPos = transform.position;
+        SetMoving(speed > 0.15f);
     }
 
     // ── Gizmos ───────────────────────────────────────────────────────────────
