@@ -51,6 +51,8 @@ Tags (static)            — tag string constants
 | `Scripts/Environment/RuntimeNavMesh.cs` | Lazy-singleton that rebakes the NavMeshSurface when land unlocks at runtime, so the wolf can follow onto new land. Debounced. |
 | `Scripts/Editor/NetworkSetup.cs` | **Tools → Setup Multiplayer** — creates NetworkManager + UnityTransport. |
 | `Scripts/Editor/WolfAnimatorSetup.cs` | **Tools → Setup Wolf Animator** — loads clips from `wolf.fbx`, assigns Avatar. |
+| `Scripts/Editor/NavMeshBaker.cs` | **Tools → Bake NavMesh** — scene-wide NavMeshSurface bake (from physics colliders). |
+| `Scripts/Editor/PostFXSetup.cs` | **Tools → Setup Post-Processing** — wires PPv2 (Bloom/Color Grading/Vignette) on the camera + a global volume. |
 
 ---
 
