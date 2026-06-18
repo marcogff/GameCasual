@@ -181,6 +181,9 @@ public class MaterialsData : NetworkBehaviour
         // Green screen flash + sound so the player knows something big just happened
         StealEffect.Instance.Celebrate();
         AudioManager.Instance.Play(AudioManager.BuildComplete);
+
+        // Re-bake the NavMesh so the wolf can chase onto the newly-unlocked land
+        RuntimeNavMesh.Instance.RequestRebake();
     }
 
     private IEnumerator Fill(int time)

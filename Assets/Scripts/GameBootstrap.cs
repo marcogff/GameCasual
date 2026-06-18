@@ -27,6 +27,7 @@ public static class GameBootstrap
         Ensure<MainMenu>();
         Ensure<PauseMenu>();
         Ensure<WinScreen>();
+        Ensure<HintBanner>();
         Ensure<MultiplayerHUD>();
         Ensure<DayNightCycle>();
     }

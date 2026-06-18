@@ -46,7 +46,9 @@ Tags (static)            — tag string constants
 | `Scripts/UI/PauseMenu.cs` | Self-spawning "II" button (top-right) → Resume / Restart / Main Menu. |
 | `Scripts/UI/WinScreen.cs` | Watches all build sites (`MaterialsData.IsBuildSite`); shows win overlay when all `IsCompleted`. |
 | `Scripts/Audio/AudioManager.cs` | Lazy-singleton SFX/music. Loads clips by name from `Resources/Audio/`. Silent if clips absent. |
-| `Scripts/Environment/DayNightCycle.cs` | Gentle daylight arc on the directional light + ambient. Never goes dark. Delete file to disable. |
+| `Scripts/UI/HintBanner.cs` | Self-spawning onboarding tips at the bottom; cycles a few hints at run start then removes itself. |
+| `Scripts/Environment/DayNightCycle.cs` | Full day→night loop (sun rotates, real dark night). Tuning consts at top: `CycleSeconds`, `NightSunIntensity`, `NightAmbient`, `StartDayT`. Delete file to disable. |
+| `Scripts/Environment/RuntimeNavMesh.cs` | Lazy-singleton that rebakes the NavMeshSurface when land unlocks at runtime, so the wolf can follow onto new land. Debounced. |
 | `Scripts/Editor/NetworkSetup.cs` | **Tools → Setup Multiplayer** — creates NetworkManager + UnityTransport. |
 | `Scripts/Editor/WolfAnimatorSetup.cs` | **Tools → Setup Wolf Animator** — loads clips from `wolf.fbx`, assigns Avatar. |
 
@@ -168,5 +170,5 @@ Agents/Areas). The `com.unity.ai.navigation` package bakes via a **NavMeshSurfac
 component. Use **Tools → Bake NavMesh** (`Scripts/Editor/NavMeshBaker.cs`) for a
 one-click scene-wide bake, then save the scene. Land the player unlocks at runtime
 (`MaterialsData.DeployLand`) is NOT in the baked mesh, so the wolf can't follow there
-— keep wolves/resources within the baked starting area, or add runtime
-`NavMeshSurface` rebaking in a later pass.
+— `RuntimeNavMesh` now rebakes the surface when land unlocks at runtime, so the
+wolf can follow onto newly-built land (provided that land has a Collider).

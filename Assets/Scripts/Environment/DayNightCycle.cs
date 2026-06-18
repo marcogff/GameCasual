@@ -1,15 +1,17 @@
 using UnityEngine;
 
 /// <summary>
-/// Self-spawning, gentle daylight atmosphere cycle.
+/// Self-spawning day/night cycle. Rotates the scene's directional light through a
+/// full rise→noon→set→midnight loop and drives sun colour/intensity + ambient so
+/// the world actually gets dark at night.
 ///
-/// Finds the scene's directional light and smoothly arcs it between a warm low
-/// "golden hour" and a bright high "midday" and back, also drifting the ambient
-/// colour. It deliberately NEVER goes dark — this is mood, not a survival night —
-/// so it can't make the game unplayable.
-///
-/// Self-contained: auto-spawns after the scene loads. To disable, delete this file.
-/// Tune the look with the constants below.
+/// ─────────── TUNE HERE ───────────
+///   CycleSeconds     — length of a FULL day+night loop (bigger = slower).
+///   NightSunIntensity / NightAmbient — how dark night is (smaller = darker).
+///   StartDayT        — where the cycle begins (0.30 ≈ early afternoon, so you
+///                      don't spawn into darkness).
+/// ──────────────────────────────────
+/// Self-contained — auto-spawns after the scene loads. Delete this file to disable.
 /// </summary>
 public class DayNightCycle : MonoBehaviour
 {
@@ -20,33 +22,31 @@ public class DayNightCycle : MonoBehaviour
         new GameObject("DayNightCycle").AddComponent<DayNightCycle>();
     }
 
-    // ── Tuning ────────────────────────────────────────────────────────────────
-    private const float CycleSeconds = 110f;          // full warm→bright→warm loop
+    // ===== TUNE HERE =====
+    private const float CycleSeconds = 360f;   // full day+night loop (6 min). Raise to slow down.
+    private const float StartDayT    = 0.30f;  // start mid-afternoon (0=sunrise .25=noon .5=sunset .75=midnight)
 
-    private const float PitchLow  = 22f;              // sun near horizon (warm)
-    private const float PitchHigh = 62f;              // sun high (midday)
+    // Day look
+    private static readonly Color DaySunColor   = new Color(1f, 0.96f, 0.86f);
+    private const  float          DaySunIntensity = 1.15f;
+    private static readonly Color DayAmbient    = new Color(0.60f, 0.62f, 0.60f);
 
-    private static readonly Color WarmLight   = new Color(1f, 0.82f, 0.60f);
-    private static readonly Color BrightLight = new Color(1f, 0.97f, 0.90f);
-    private const float IntensityLow  = 0.80f;
-    private const float IntensityHigh = 1.15f;
+    // Dusk / dawn warm tint near the horizon
+    private static readonly Color DuskColor     = new Color(1f, 0.50f, 0.30f);
 
-    private static readonly Color WarmAmbient   = new Color(0.42f, 0.40f, 0.46f);
-    private static readonly Color BrightAmbient = new Color(0.62f, 0.64f, 0.62f);
+    // Night look — make these smaller for a darker night
+    private static readonly Color NightSunColor = new Color(0.45f, 0.55f, 0.95f); // moonlight
+    private const  float          NightSunIntensity = 0.04f;
+    private static readonly Color NightAmbient  = new Color(0.04f, 0.05f, 0.11f); // near-dark blue
+    // =====================
 
-    // ── State ───────────────────────────────────────────────────────────────────
     private Light _sun;
     private float _baseYaw;
 
     void Start()
     {
         _sun = FindSun();
-        if (_sun == null)
-        {
-            // Nothing to drive — remove ourselves quietly.
-            enabled = false;
-            return;
-        }
+        if (_sun == null) { enabled = false; return; }
         _baseYaw = _sun.transform.eulerAngles.y;
     }
 
@@ -54,21 +54,30 @@ public class DayNightCycle : MonoBehaviour
     {
         if (_sun == null) return;
 
-        // Smooth 0..1..0 over the cycle (sine = no hard turn-arounds)
-        float t = Mathf.Sin(Time.time / CycleSeconds * Mathf.PI * 2f) * 0.5f + 0.5f;
-
-        float pitch = Mathf.Lerp(PitchLow, PitchHigh, t);
+        // Time of day 0..1 (wraps). Scaled time so it pauses with the game.
+        float dayT  = Mathf.Repeat(Time.time / CycleSeconds + StartDayT, 1f);
+        float pitch = dayT * 360f;   // 0 sunrise · 90 noon · 180 sunset · 270 midnight
         _sun.transform.rotation = Quaternion.Euler(pitch, _baseYaw, 0f);
 
-        _sun.color     = Color.Lerp(WarmLight, BrightLight, t);
-        _sun.intensity = Mathf.Lerp(IntensityLow, IntensityHigh, t);
+        float elevation = Mathf.Sin(pitch * Mathf.Deg2Rad);  // -1 (midnight) .. +1 (noon)
+        float day       = Mathf.Clamp01(elevation);          // 0 all night, ramps up by day
+        float horizon   = 1f - Mathf.Clamp01(Mathf.Abs(elevation) * 3f); // peaks at dawn/dusk
 
-        RenderSettings.ambientLight = Color.Lerp(WarmAmbient, BrightAmbient, t);
+        // Base day<->night blend
+        Color sunCol = Color.Lerp(NightSunColor, DaySunColor, day);
+        float sunInt = Mathf.Lerp(NightSunIntensity, DaySunIntensity, day);
+        Color amb    = Color.Lerp(NightAmbient, DayAmbient, day);
+
+        // Warm tint at dawn/dusk (only while the sun is roughly up)
+        sunCol = Color.Lerp(sunCol, DuskColor, horizon * Mathf.Clamp01(elevation + 0.25f));
+
+        _sun.color     = sunCol;
+        _sun.intensity = sunInt;
+        RenderSettings.ambientLight = amb;
     }
 
     static Light FindSun()
     {
-        // Prefer RenderSettings.sun, else the first enabled directional light
         if (RenderSettings.sun != null) return RenderSettings.sun;
         foreach (var l in FindObjectsByType<Light>(FindObjectsSortMode.None))
             if (l.type == LightType.Directional && l.enabled) return l;
