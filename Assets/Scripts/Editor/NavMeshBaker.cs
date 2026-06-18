@@ -3,6 +3,7 @@ using Unity.AI.Navigation;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.AI;            // NavMeshCollectGeometry
 
 /// <summary>
 /// Tools → Bake NavMesh
