@@ -41,6 +41,12 @@ Tags (static)            — tag string constants
 | `Scripts/Networking/LobbyUI.cs` | Phase 1 — programmatic Canvas overlay. No prefab needed. |
 | `Scripts/Networking/PlayerNameTag.cs` | Phase 2 — billboard TMP name tag, hidden on local player. |
 | `Scripts/Networking/MultiplayerHUD.cs` | Phase 5 — self-spawning in-session HUD: join code, teammate counts, "waiting for players". No Inspector wiring. |
+| `Scripts/GameBootstrap.cs` | Re-spawns all self-contained managers on every scene load (so Restart/Play Again work in builds). |
+| `Scripts/UI/MainMenu.cs` | Self-spawning launch menu. Pauses (`timeScale=0`) until PLAY. Game name/tagline are constants at top. |
+| `Scripts/UI/PauseMenu.cs` | Self-spawning "II" button (top-right) → Resume / Restart / Main Menu. |
+| `Scripts/UI/WinScreen.cs` | Watches all build sites (`MaterialsData.IsBuildSite`); shows win overlay when all `IsCompleted`. |
+| `Scripts/Audio/AudioManager.cs` | Lazy-singleton SFX/music. Loads clips by name from `Resources/Audio/`. Silent if clips absent. |
+| `Scripts/Environment/DayNightCycle.cs` | Gentle daylight arc on the directional light + ambient. Never goes dark. Delete file to disable. |
 | `Scripts/Editor/NetworkSetup.cs` | **Tools → Setup Multiplayer** — creates NetworkManager + UnityTransport. |
 | `Scripts/Editor/WolfAnimatorSetup.cs` | **Tools → Setup Wolf Animator** — loads clips from `wolf.fbx`, assigns Avatar. |
 
@@ -136,6 +142,21 @@ the packages are still in `manifest.json` (Unity silently strips entries with in
 
 - **Phase 4** (TODO): Sync Enemy over the network. Spawn wolf via `NetworkManager.SpawnWithOwnership`, run AI only on server, broadcast state via `NetworkVariable<byte>`. Remote clients receive position via `NetworkTransform`.
 - **Phase 5** (code done — `MultiplayerHUD.cs`): teammate resource counts on HUD, join code as in-game overlay, "waiting for players" banner. Self-spawns at runtime; hidden in solo play. Remaining optional: gate gameplay until both players are present (currently the game is always live).
+
+## Audio setup (optional — game runs silent without it)
+
+`AudioManager` loads clips by name from `Assets/Resources/Audio/`. Create that
+folder and drop files with these names (any of .wav/.ogg/.mp3):
+`music`, `pickup`, `deposit`, `build_complete`, `steal`, `wolf_alert`, `ui_click`.
+Missing clips are skipped — every `AudioManager.Instance.Play(...)` call is safe.
+Free CC0 sources: kenney.nl/assets (UI/impact packs), freesound.org.
+
+## Game shell
+
+Menus/HUD are all **self-spawning, no Inspector wiring** (see `GameBootstrap`).
+They live on plain runtime GameObjects and rebuild their own Canvas. Sorting order:
+MainMenu 300 · PauseMenu 250 · WinScreen 280 · StealEffect 200 · LobbyUI 100 ·
+MultiplayerHUD 90. The menu shows on every scene load (incl. Restart) by design.
 
 ## NavMesh note (wolf following)
 

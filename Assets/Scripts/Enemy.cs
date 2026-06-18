@@ -180,6 +180,7 @@ public class Enemy : MonoBehaviour
         _agent.isStopped = false;     // guard against a stuck-stopped state from a prior steal
         _chaseStartTime  = Time.time;
         _alert?.Show();               // telegraph the attack to the player
+        AudioManager.Instance.Play(AudioManager.WolfAlert);
 
         // Set the destination immediately — don't wait a frame or for the throttle,
         // otherwise the wolf appears to "see" the player ("!") but stand still.
@@ -315,8 +316,9 @@ public class Enemy : MonoBehaviour
         // Let the player react to the theft (bagPosIndex correction, etc.)
         _playerCtrl.OnResourcesStolen(amount);
 
-        // Screen feedback for the local player
+        // Screen + audio feedback for the local player
         StealEffect.Instance.Flash();
+        AudioManager.Instance.Play(AudioManager.Steal);
 
         // Squash-and-stretch pop RELATIVE to the wolf's real scale, then run home.
         // (Bug was scaling back to Vector3.one — the prefab is 3x, so it shrank.)

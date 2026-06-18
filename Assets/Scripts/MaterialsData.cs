@@ -67,6 +67,12 @@ public class MaterialsData : NetworkBehaviour
 
     public int currentElements = 10;
 
+    /// <summary>True once this build site has unlocked its land. Read by WinScreen.</summary>
+    public bool IsCompleted => _currentDeployed;
+
+    /// <summary>True if this object is a build site (it deploys land), not a resource node.</summary>
+    public bool IsBuildSite => prefabLand != null;
+
     private bool _canDropLocal  = true;
     private bool _currentDeployed;
     private bool _coroutineExecuted;
@@ -172,8 +178,9 @@ public class MaterialsData : NetworkBehaviour
             .setOnComplete(() =>
                 LeanTween.scale(prefabLand, Vector3.one, 0.18f).setEaseOutQuad());
 
-        // Green screen flash so the player knows something big just happened
+        // Green screen flash + sound so the player knows something big just happened
         StealEffect.Instance.Celebrate();
+        AudioManager.Instance.Play(AudioManager.BuildComplete);
     }
 
     private IEnumerator Fill(int time)

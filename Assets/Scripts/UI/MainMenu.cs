@@ -50,6 +50,7 @@ public class MainMenu : MonoBehaviour
 
     void OnPlay()
     {
+        AudioManager.Instance.Play(AudioManager.UiClick);
         // Slide/scale the menu away while still paused, then resume.
         LeanTween.scale(_panel, Vector3.zero, 0.3f).setEaseInBack().setIgnoreTimeScale(true);
         LeanTween.alpha(_fade.rectTransform, 0f, 0.3f).setIgnoreTimeScale(true)

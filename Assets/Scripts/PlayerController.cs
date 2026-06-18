@@ -353,6 +353,8 @@ public class PlayerController : NetworkBehaviour
         prefab.SetActive(false);
         _instantiated = false;
 
+        AudioManager.Instance.Play(add ? AudioManager.Pickup : AudioManager.Deposit);
+
         if (type == MaterialType.Wood)
         {
             if (add)
