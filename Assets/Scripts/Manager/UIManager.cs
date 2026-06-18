@@ -62,6 +62,10 @@ public class UIManager : MonoBehaviour
             : 2000f;
         _panelOffscreenX = canvasWidth * 0.5f + _upgradePanelRect.rect.width;
 
+        // Build a close (✕) button at runtime so the panel can always be dismissed,
+        // even if no close button is wired up in the Inspector.
+        BuildCloseButton();
+
         // Dark background + outline on each resource counter so they read against any colour
         SetupResourceCounter(_woodCanvas);
         SetupResourceCounter(_fishCanvas);
@@ -189,6 +193,55 @@ public class UIManager : MonoBehaviour
         _upgradePanelInnerCanvas.blocksRaycasts = false;
         _upgradePanelInnerCanvas.interactable   = false;
         LeanTween.alphaCanvas(_upgradePanelInnerCanvas, 0, .3f);
+    }
+
+    // Creates a round "✕" close button in the top-right of the upgrade panel and
+    // wires it to CloseUpgradePanel(). Built in code so no Inspector setup is needed.
+    private void BuildCloseButton()
+    {
+        if (_upgradePanelInner == null) return;
+
+        // Avoid duplicates if Start somehow runs twice
+        if (_upgradePanelInner.Find("CloseButton_Auto") != null) return;
+
+        var go = new GameObject("CloseButton_Auto", typeof(RectTransform));
+        go.transform.SetParent(_upgradePanelInner, false);
+
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f); // top-right corner
+        rt.pivot     = new Vector2(1f, 1f);
+        rt.sizeDelta = new Vector2(90f, 90f);
+        rt.anchoredPosition = new Vector2(-12f, -12f);
+
+        // If the panel uses a LayoutGroup, make sure it doesn't reposition this button
+        var le = go.AddComponent<LayoutElement>();
+        le.ignoreLayout = true;
+
+        var img = go.AddComponent<Image>();
+        img.color = new Color(0.85f, 0.25f, 0.25f, 1f); // red
+
+        var btn = go.AddComponent<Button>();
+        var cb  = btn.colors;
+        cb.highlightedColor = new Color(1f, 0.4f, 0.4f, 1f);
+        cb.pressedColor     = new Color(0.6f, 0.15f, 0.15f, 1f);
+        btn.colors = cb;
+        btn.onClick.AddListener(CloseUpgradePanel);
+
+        // "✕" label
+        var txtGO = new GameObject("X", typeof(RectTransform));
+        txtGO.transform.SetParent(go.transform, false);
+        var txtRect = txtGO.GetComponent<RectTransform>();
+        txtRect.anchorMin = Vector2.zero;
+        txtRect.anchorMax = Vector2.one;
+        txtRect.offsetMin = txtRect.offsetMax = Vector2.zero;
+
+        var txt = txtGO.AddComponent<TextMeshProUGUI>();
+        txt.text      = "✕"; // ✕
+        txt.fontSize  = 48f;
+        txt.color     = Color.white;
+        txt.fontStyle = FontStyles.Bold;
+        txt.alignment = TextAlignmentOptions.Center;
+        if (_gameFont != null) txt.font = _gameFont;
     }
 
     // Scales the counter up and back down — called each time a new resource is picked up.

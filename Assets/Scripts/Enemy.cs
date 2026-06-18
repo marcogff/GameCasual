@@ -65,12 +65,21 @@ public class Enemy : MonoBehaviour
         _agent.acceleration     = 12f;
         _agent.angularSpeed     = 360f;
         _agent.stoppingDistance = 0.3f;
-        _agent.autoBraking      = true;
+        _agent.autoBraking      = false; // chaser shouldn't slow down near waypoints
+        _agent.isStopped        = false;
 
-        // Hit trigger — stealing on contact; added here so no prefab edits are needed
+        // Hit trigger — stealing on contact; added here so no prefab edits are needed.
         var hit   = gameObject.AddComponent<SphereCollider>();
         hit.isTrigger = true;
         hit.radius    = _stealRadius;
+
+        // Trigger events (OnTriggerEnter/Stay) only fire if at least one of the two
+        // colliders has a Rigidbody. The NavMeshAgent moves by transform, not physics,
+        // so add a kinematic Rigidbody here to guarantee steal-on-contact works.
+        var rb = gameObject.GetComponent<Rigidbody>();
+        if (rb == null) rb = gameObject.AddComponent<Rigidbody>();
+        rb.isKinematic = true;
+        rb.useGravity  = false;
 
         // Find the nearest player — handles both solo and 2-player sessions
         if (!RefreshTarget())
@@ -151,14 +160,30 @@ public class Enemy : MonoBehaviour
 
         if (dist <= _detectionRange)
         {
-            _state       = State.Chase;
-            _agent.speed = _chaseSpeed;
-            _alert?.Show(); // telegraph the attack to the player
+            EnterChase();
             return;
         }
 
         if (!_agent.pathPending && _agent.remainingDistance < 0.5f)
             PickWanderTarget();
+    }
+
+    void EnterChase()
+    {
+        _state           = State.Chase;
+        _agent.speed     = _chaseSpeed;
+        _agent.isStopped = false;     // guard against a stuck-stopped state from a prior steal
+        _alert?.Show();               // telegraph the attack to the player
+
+        // Set the destination immediately — don't wait a frame or for the throttle,
+        // otherwise the wolf appears to "see" the player ("!") but stand still.
+        ChaseStep();
+
+#if UNITY_EDITOR
+        Debug.Log($"[Enemy] Chase START. pos={transform.position} dest={_agent.destination} " +
+                  $"isStopped={_agent.isStopped} speed={_agent.speed} " +
+                  $"pathStatus={_agent.pathStatus} onMesh={_agent.isOnNavMesh}");
+#endif
     }
 
     void PickWanderTarget()
@@ -202,16 +227,23 @@ public class Enemy : MonoBehaviour
             return;
         }
 
+        // Keep the alert pinned while actively chasing
+        _agent.isStopped = false;
+
         // Throttle destination writes — NavMesh handles internal path smoothing;
         // setting destination every frame is wasteful.
         if (Time.time - _lastDestUpdate > DestUpdateInterval)
-        {
-            _lastDestUpdate = Time.time;
-            if (NavMesh.SamplePosition(_player.position, out NavMeshHit navHit, 3f, NavMesh.AllAreas))
-                _agent.SetDestination(navHit.position);
-            else
-                _agent.SetDestination(_player.position);
-        }
+            ChaseStep();
+    }
+
+    /// <summary>Points the agent at the current player position (sampled onto the NavMesh).</summary>
+    void ChaseStep()
+    {
+        _lastDestUpdate = Time.time;
+        if (NavMesh.SamplePosition(_player.position, out NavMeshHit navHit, 5f, NavMesh.AllAreas))
+            _agent.SetDestination(navHit.position);
+        else
+            _agent.SetDestination(_player.position);
     }
 
     // ── Hit detection (steal on contact) ─────────────────────────────────────
