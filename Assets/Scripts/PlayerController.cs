@@ -52,9 +52,6 @@ public class PlayerController : NetworkBehaviour
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Owner);
 
-    // ── Animation ─────────────────────────────────────────────────────────────
-    private static readonly int IsRunHash = Animator.StringToHash("isRun");
-
     // ── Constants ─────────────────────────────────────────────────────────────
     private const float SpeedUpgradeAcceleration = 240f;
     private const float RunLerpFactor = 0.15f;
@@ -350,6 +347,7 @@ public class PlayerController : NetworkBehaviour
             else if (currentMaterialData != null && currentElementsWood.Count > 0)
             {
                 currentMaterialData.elementsInBuild.Add(prefab);
+                currentMaterialData.OnProgressAdded();
                 Destroy(currentElementsWood[0], VfxLifetime);
                 currentElementsWood.RemoveAt(0);
             }
@@ -363,12 +361,23 @@ public class PlayerController : NetworkBehaviour
             else if (currentMaterialData != null && currentElementsFish.Count > 0)
             {
                 currentMaterialData.elementsInBuild.Add(prefab);
+                currentMaterialData.OnProgressAdded();
                 Destroy(currentElementsFish[0], VfxLifetime);
                 currentElementsFish.RemoveAt(0);
             }
         }
 
         // Sync inventory counts so teammates can see our haul
+        SyncInventoryNetwork();
+    }
+
+    /// <summary>
+    /// Called by Enemy when it successfully steals resources from this player.
+    /// Adjusts the visual bag-position index to match the reduced inventory.
+    /// </summary>
+    public void OnResourcesStolen(int count)
+    {
+        bagPosIndex = Mathf.Max(0, bagPosIndex - count);
         SyncInventoryNetwork();
     }
 

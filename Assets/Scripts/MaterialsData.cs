@@ -139,11 +139,24 @@ public class MaterialsData : NetworkBehaviour
         }
     }
 
-    /// <summary>Called by PlayerController when a resource is deposited here.</summary>
-    public void RegisterBuildDeposit()
+    /// <summary>
+    /// Called by PlayerController immediately after a resource is deposited here.
+    /// Plays a bounce on the progress text and syncs the network variable.
+    /// </summary>
+    public void OnProgressAdded()
     {
-        if (!IsServerSide) return; // clients call ServerRpc on PlayerController instead
-        if (IsSpawned) NetBuildProgress.Value = elementsInBuild.Count;
+        // Sync networked build count
+        if (IsSpawned && IsServer)
+            NetBuildProgress.Value = elementsInBuild.Count;
+
+        // Bounce the progress label so the player gets immediate feedback
+        if (parentText == null) return;
+        LeanTween.cancel(parentText);
+        parentText.transform.localScale = Vector3.one;
+        LeanTween.scale(parentText, Vector3.one * 1.4f, 0.08f)
+            .setEaseOutBack()
+            .setOnComplete(() =>
+                LeanTween.scale(parentText, Vector3.one * 1.2f, 0.12f).setEaseOutQuad());
     }
 
     // ── Private ───────────────────────────────────────────────────────────────

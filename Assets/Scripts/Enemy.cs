@@ -13,11 +13,11 @@ public class Enemy : MonoBehaviour
     [SerializeField] private float _wanderRadius   = 8f;
 
     [Header("Detection")]
-    [SerializeField] private float _detectionRange = 10f;  // always chase player in this range
-    [SerializeField] private float _loseRange      = 15f;  // give up if player gets this far
+    [SerializeField] private float _detectionRange = 10f;
+    [SerializeField] private float _loseRange      = 15f;
 
     [Header("Stealing")]
-    [SerializeField] private float _stealRadius    = 1.2f; // trigger collider size
+    [SerializeField] private float _stealRadius    = 1.2f;
     [SerializeField] private int   _stealAmount    = 5;
     [SerializeField] private float _stealCooldown  = 3f;
 
@@ -36,6 +36,7 @@ public class Enemy : MonoBehaviour
     private Animator         _animator;
     private Transform        _player;
     private PlayerController _playerCtrl;
+    private WolfAlert        _alert;
 
     // ── Animation ────────────────────────────────────────────────────────────
     private bool         _wasMoving;
@@ -43,9 +44,12 @@ public class Enemy : MonoBehaviour
     private const string AnimRun  = "Run";
 
     // ── Misc ─────────────────────────────────────────────────────────────────
-    private float _lastStealTime = -99f;
-    private const float StealPopScale = 1.4f;
-    private const float StealPopTime  = 0.12f;
+    private float _lastStealTime  = -99f;
+    private float _lastDestUpdate = 0f;
+
+    private const float DestUpdateInterval = 0.1f; // cap destination writes to 10/s
+    private const float StealPopScale      = 1.4f;
+    private const float StealPopTime       = 0.12f;
 
     // ── Start ────────────────────────────────────────────────────────────────
 
@@ -53,6 +57,7 @@ public class Enemy : MonoBehaviour
     {
         _agent    = GetComponent<NavMeshAgent>();
         _animator = GetComponentInChildren<Animator>();
+        _alert    = gameObject.AddComponent<WolfAlert>();
 
         _agent.speed            = _wanderSpeed;
         _agent.acceleration     = 12f;
@@ -60,15 +65,11 @@ public class Enemy : MonoBehaviour
         _agent.stoppingDistance = 0.3f;
         _agent.autoBraking      = true;
 
-        // ── Hit trigger collider ─────────────────────────────────────────────
-        // A sphere trigger around the wolf — when the player enters it while
-        // the wolf is chasing, resources are stolen immediately (hit mechanic).
-        // This is added in code so no manual prefab setup is needed.
-        var hit = gameObject.AddComponent<SphereCollider>();
+        // Hit trigger — stealing on contact; added here so no prefab edits are needed
+        var hit   = gameObject.AddComponent<SphereCollider>();
         hit.isTrigger = true;
         hit.radius    = _stealRadius;
 
-        // ── Find player ──────────────────────────────────────────────────────
         var playerGO = GameObject.FindWithTag(Tags.Player);
         if (playerGO != null)
         {
@@ -116,11 +117,11 @@ public class Enemy : MonoBehaviour
     {
         float dist = Vector3.Distance(transform.position, _player.position);
 
-        // Always chase if player is close — steal only triggers when they have resources
         if (dist <= _detectionRange)
         {
             _state       = State.Chase;
             _agent.speed = _chaseSpeed;
+            _alert?.Show(); // telegraph the attack to the player
             return;
         }
 
@@ -153,33 +154,36 @@ public class Enemy : MonoBehaviour
     {
         float dist = Vector3.Distance(transform.position, _player.position);
 
-        // Lost the player
         if (dist > _loseRange)
         {
             _state       = State.Wander;
             _agent.speed = _wanderSpeed;
+            _alert?.Hide();
             PickWanderTarget();
             return;
         }
 
-        // Player charging at us → flee
         if (dist < _scareRange && IsPlayerChargingAtMe())
         {
+            _alert?.Hide();
             StartCoroutine(ScaredRoutine());
             return;
         }
 
-        // Keep following — stealing is handled by OnTriggerEnter/Stay
-        // Use NavMesh.SamplePosition so the destination is always on the mesh
-        if (NavMesh.SamplePosition(_player.position, out NavMeshHit navHit, 3f, NavMesh.AllAreas))
-            _agent.SetDestination(navHit.position);
-        else
-            _agent.SetDestination(_player.position);
+        // Throttle destination writes — NavMesh handles internal path smoothing;
+        // setting destination every frame is wasteful.
+        if (Time.time - _lastDestUpdate > DestUpdateInterval)
+        {
+            _lastDestUpdate = Time.time;
+            if (NavMesh.SamplePosition(_player.position, out NavMeshHit navHit, 3f, NavMesh.AllAreas))
+                _agent.SetDestination(navHit.position);
+            else
+                _agent.SetDestination(_player.position);
+        }
     }
 
     // ── Hit detection (steal on contact) ─────────────────────────────────────
 
-    // Called when player walks into the wolf's trigger sphere OR wolf runs into player
     void OnTriggerEnter(Collider other)
     {
         if (_state == State.Scared) return;
@@ -187,7 +191,6 @@ public class Enemy : MonoBehaviour
         AttemptSteal();
     }
 
-    // Also fires while player stays inside the trigger (handles slow overlap)
     void OnTriggerStay(Collider other)
     {
         if (_state == State.Scared) return;
@@ -200,9 +203,9 @@ public class Enemy : MonoBehaviour
         if (Time.time - _lastStealTime < _stealCooldown) return;
         if (_playerCtrl == null) return;
 
-        int wood  = _playerCtrl.currentElementsWood.Count;
-        int fish  = _playerCtrl.currentElementsFish.Count;
-        if (wood + fish == 0) return;   // nothing to steal
+        int wood = _playerCtrl.currentElementsWood.Count;
+        int fish = _playerCtrl.currentElementsFish.Count;
+        if (wood + fish == 0) return;
 
         _lastStealTime   = Time.time;
         _agent.isStopped = true;
@@ -226,6 +229,12 @@ public class Enemy : MonoBehaviour
                 _playerCtrl.currentElementsWood.RemoveAt(0);
             }
         }
+
+        // Let the player react to the theft (bagPosIndex correction, etc.)
+        _playerCtrl.OnResourcesStolen(amount);
+
+        // Screen feedback for the local player
+        StealEffect.Instance.Flash();
 
         // Squash-and-stretch pop, then run home
         LeanTween.cancel(gameObject);

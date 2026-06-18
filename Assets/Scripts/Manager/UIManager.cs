@@ -24,6 +24,8 @@ public class UIManager : MonoBehaviour
     private bool _prevHasMat;
     private bool _prevHasWood;
     private bool _prevHasFish;
+    private int  _prevWoodCount;
+    private int  _prevFishCount;
     private bool _panelOpen;
 
     // Computed from actual canvas width in Start() so any screen size works
@@ -91,6 +93,9 @@ public class UIManager : MonoBehaviour
             _prevHasMat = hasMat;
         }
 
+        int woodCount = player.currentElementsWood.Count;
+        int fishCount = player.currentElementsFish.Count;
+
         if (hasWood != _prevHasWood)
         {
             _woodCanvas.gameObject.SetActive(hasWood);
@@ -98,7 +103,12 @@ public class UIManager : MonoBehaviour
             _prevHasWood = hasWood;
         }
         if (hasWood)
-            _woodText.text = player.currentElementsWood.Count.ToString();
+        {
+            _woodText.text = woodCount.ToString();
+            if (woodCount > _prevWoodCount)
+                PopCounter(_woodCanvas.gameObject);
+        }
+        _prevWoodCount = woodCount;
 
         if (hasFish != _prevHasFish)
         {
@@ -107,7 +117,12 @@ public class UIManager : MonoBehaviour
             _prevHasFish = hasFish;
         }
         if (hasFish)
-            _fishText.text = player.currentElementsFish.Count.ToString();
+        {
+            _fishText.text = fishCount.ToString();
+            if (fishCount > _prevFishCount)
+                PopCounter(_fishCanvas.gameObject);
+        }
+        _prevFishCount = fishCount;
     }
 
     private void UpdateUpgradeButton()
@@ -174,6 +189,17 @@ public class UIManager : MonoBehaviour
         _upgradePanelInnerCanvas.blocksRaycasts = false;
         _upgradePanelInnerCanvas.interactable   = false;
         LeanTween.alphaCanvas(_upgradePanelInnerCanvas, 0, .3f);
+    }
+
+    // Scales the counter up and back down — called each time a new resource is picked up.
+    private static void PopCounter(GameObject counter)
+    {
+        LeanTween.cancel(counter);
+        counter.transform.localScale = Vector3.one;
+        LeanTween.scale(counter, Vector3.one * 1.35f, 0.07f)
+            .setEaseOutBack()
+            .setOnComplete(() =>
+                LeanTween.scale(counter, Vector3.one, 0.1f).setEaseOutQuad());
     }
 
     // Applies _gameFont to all TMP texts owned by the HUD
