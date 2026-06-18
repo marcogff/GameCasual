@@ -40,6 +40,7 @@ Tags (static)            — tag string constants
 | `Scripts/Networking/LobbyManager.cs` | Phase 1 — UGS init, Relay allocation, Lobby create/join, 15s heartbeat. |
 | `Scripts/Networking/LobbyUI.cs` | Phase 1 — programmatic Canvas overlay. No prefab needed. |
 | `Scripts/Networking/PlayerNameTag.cs` | Phase 2 — billboard TMP name tag, hidden on local player. |
+| `Scripts/Networking/MultiplayerHUD.cs` | Phase 5 — self-spawning in-session HUD: join code, teammate counts, "waiting for players". No Inspector wiring. |
 | `Scripts/Editor/NetworkSetup.cs` | **Tools → Setup Multiplayer** — creates NetworkManager + UnityTransport. |
 | `Scripts/Editor/WolfAnimatorSetup.cs` | **Tools → Setup Wolf Animator** — loads clips from `wolf.fbx`, assigns Avatar. |
 
@@ -133,5 +134,14 @@ the packages are still in `manifest.json` (Unity silently strips entries with in
 
 ## What's next (Phase 4 / 5)
 
-- **Phase 4**: Sync Enemy over the network. Spawn wolf via `NetworkManager.SpawnWithOwnership`, run AI only on server, broadcast state via `NetworkVariable<byte>`. Remote clients receive position via `NetworkTransform`.
-- **Phase 5**: UI polish — show teammate's resource counts on HUD, show join code as in-game overlay, add "waiting for players" state before game starts.
+- **Phase 4** (TODO): Sync Enemy over the network. Spawn wolf via `NetworkManager.SpawnWithOwnership`, run AI only on server, broadcast state via `NetworkVariable<byte>`. Remote clients receive position via `NetworkTransform`.
+- **Phase 5** (code done — `MultiplayerHUD.cs`): teammate resource counts on HUD, join code as in-game overlay, "waiting for players" banner. Self-spawns at runtime; hidden in solo play. Remaining optional: gate gameplay until both players are present (currently the game is always live).
+
+## NavMesh note (wolf following)
+
+If the wolf shows "!" but won't follow, the editor logs `pathStatus=PathPartial` —
+the player is on NavMesh that isn't connected to the wolf's. **Re-bake** the NavMesh
+(Window → AI → Navigation → Bake) covering the whole walkable map. Land the player
+unlocks at runtime (`MaterialsData.DeployLand`) is NOT in the baked mesh, so the wolf
+can't follow there — keep wolves/resources within the baked starting area, or add a
+runtime `NavMeshSurface` rebake in a later pass.
